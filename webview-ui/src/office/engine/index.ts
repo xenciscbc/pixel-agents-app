@@ -9,5 +9,6 @@ export {
   renderGridOverlay,
   renderGhostPreview,
   renderSelectionHighlight,
+  renderDeleteButton,
 } from './renderer.js'
-export type { EditorRenderState, SelectionRenderState } from './renderer.js'
+export type { EditorRenderState, SelectionRenderState, DeleteButtonBounds } from './renderer.js'

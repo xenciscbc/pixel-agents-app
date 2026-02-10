@@ -170,7 +170,7 @@ export function DebugView({
       }}
     >
       {/* Top padding so cards don't overlap the floating toolbar */}
-      <div style={{ padding: '40px 12px 12px', fontSize: '14px' }}>
+      <div style={{ padding: '12px 12px 12px', fontSize: '14px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {agents.map(renderAgentCard)}
         </div>

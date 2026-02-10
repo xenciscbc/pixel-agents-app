@@ -225,6 +225,45 @@ export function renderSelectionHighlight(
   ctx.restore()
 }
 
+export function renderDeleteButton(
+  ctx: CanvasRenderingContext2D,
+  col: number,
+  row: number,
+  w: number,
+  _h: number,
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): DeleteButtonBounds {
+  const s = TILE_SIZE * zoom
+  // Position at top-right corner of selected furniture
+  const cx = offsetX + (col + w) * s + 1
+  const cy = offsetY + row * s - 1
+  const radius = Math.max(6, zoom * 3)
+
+  // Circle background
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(200, 50, 50, 0.85)'
+  ctx.fill()
+
+  // X mark
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = Math.max(1.5, zoom * 0.5)
+  ctx.lineCap = 'round'
+  const xSize = radius * 0.45
+  ctx.beginPath()
+  ctx.moveTo(cx - xSize, cy - xSize)
+  ctx.lineTo(cx + xSize, cy + xSize)
+  ctx.moveTo(cx + xSize, cy - xSize)
+  ctx.lineTo(cx - xSize, cy + xSize)
+  ctx.stroke()
+  ctx.restore()
+
+  return { cx, cy, radius }
+}
+
 // ── Speech bubbles ──────────────────────────────────────────────
 
 const BUBBLE_FADE_DURATION = 0.5
@@ -263,6 +302,15 @@ export function renderBubbles(
   }
 }
 
+export interface DeleteButtonBounds {
+  /** Center X in device pixels */
+  cx: number
+  /** Center Y in device pixels */
+  cy: number
+  /** Radius in device pixels */
+  radius: number
+}
+
 export interface EditorRenderState {
   showGrid: boolean
   ghostSprite: SpriteData | null
@@ -274,6 +322,8 @@ export interface EditorRenderState {
   selectedW: number
   selectedH: number
   hasSelection: boolean
+  /** Updated each frame by renderDeleteButton */
+  deleteButtonBounds: DeleteButtonBounds | null
 }
 
 export interface SelectionRenderState {
@@ -334,6 +384,9 @@ export function renderFrame(
     }
     if (editor.hasSelection) {
       renderSelectionHighlight(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
+      editor.deleteButtonBounds = renderDeleteButton(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
+    } else {
+      editor.deleteButtonBounds = null
     }
   }
 

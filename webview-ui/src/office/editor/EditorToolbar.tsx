@@ -9,8 +9,8 @@ import { getColorizedFloorSprite, getFloorPatternCount, hasFloorSprites } from '
 const btnStyle: React.CSSProperties = {
   padding: '3px 8px',
   fontSize: '11px',
-  background: 'var(--vscode-button-secondaryBackground, #3A3D41)',
-  color: 'var(--vscode-button-secondaryForeground, #ccc)',
+  background: 'rgba(255, 255, 255, 0.08)',
+  color: 'rgba(255, 255, 255, 0.7)',
   border: '1px solid transparent',
   borderRadius: 3,
   cursor: 'pointer',
@@ -18,16 +18,16 @@ const btnStyle: React.CSSProperties = {
 
 const activeBtnStyle: React.CSSProperties = {
   ...btnStyle,
-  background: 'var(--vscode-button-background)',
-  color: 'var(--vscode-button-foreground)',
-  border: '1px solid var(--vscode-focusBorder, #007fd4)',
+  background: 'rgba(90, 140, 255, 0.25)',
+  color: 'rgba(255, 255, 255, 0.9)',
+  border: '1px solid rgba(90, 140, 255, 0.4)',
 }
 
 const tabStyle: React.CSSProperties = {
   padding: '2px 6px',
   fontSize: '10px',
   background: 'transparent',
-  color: 'var(--vscode-button-secondaryForeground, #999)',
+  color: 'rgba(255, 255, 255, 0.5)',
   border: '1px solid transparent',
   borderRadius: 2,
   cursor: 'pointer',
@@ -35,29 +35,24 @@ const tabStyle: React.CSSProperties = {
 
 const activeTabStyle: React.CSSProperties = {
   ...tabStyle,
-  background: 'var(--vscode-button-secondaryBackground, #3A3D41)',
-  color: 'var(--vscode-button-secondaryForeground, #ccc)',
-  border: '1px solid var(--vscode-focusBorder, #007fd4)',
+  background: 'rgba(255, 255, 255, 0.08)',
+  color: 'rgba(255, 255, 255, 0.8)',
+  border: '1px solid rgba(90, 140, 255, 0.4)',
 }
 
 interface EditorToolbarProps {
   activeTool: EditTool
   selectedTileType: TileTypeVal
   selectedFurnitureType: string
-  selectedFurnitureUid: string | null
   floorColor: FloorColor
   onToolChange: (tool: EditTool) => void
   onTileTypeChange: (type: TileTypeVal) => void
   onFloorColorChange: (color: FloorColor) => void
   onFurnitureTypeChange: (type: string) => void
-  onDeleteSelected: () => void
-  onUndo: () => void
-  onReset: () => void
-  onSave: () => void
   loadedAssets?: LoadedAssetData
 }
 
-/** Render a 3×3 tiled preview of a floor pattern at the given color */
+/** Render a floor pattern preview at 2x (32x32 canvas showing the 16x16 tile) */
 function FloorPatternPreview({ patternIndex, color, selected, onClick }: {
   patternIndex: number
   color: FloorColor
@@ -65,8 +60,8 @@ function FloorPatternPreview({ patternIndex, color, selected, onClick }: {
   onClick: () => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const size = 48 // 3×16 = 48, shown at 48px
-  const tileZoom = 1 // render each sprite pixel as 1 canvas pixel
+  const displaySize = 32
+  const tileZoom = 2
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -74,25 +69,19 @@ function FloorPatternPreview({ patternIndex, color, selected, onClick }: {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    canvas.width = size
-    canvas.height = size
+    canvas.width = displaySize
+    canvas.height = displaySize
     ctx.imageSmoothingEnabled = false
 
     if (!hasFloorSprites()) {
       ctx.fillStyle = '#444'
-      ctx.fillRect(0, 0, size, size)
+      ctx.fillRect(0, 0, displaySize, displaySize)
       return
     }
 
     const sprite = getColorizedFloorSprite(patternIndex, color)
     const cached = getCachedSprite(sprite, tileZoom)
-
-    // Draw 3×3 grid of the tile
-    for (let r = 0; r < 3; r++) {
-      for (let c = 0; c < 3; c++) {
-        ctx.drawImage(cached, c * 16, r * 16)
-      }
-    }
+    ctx.drawImage(cached, 0, 0)
   }, [patternIndex, color])
 
   return (
@@ -100,10 +89,10 @@ function FloorPatternPreview({ patternIndex, color, selected, onClick }: {
       onClick={onClick}
       title={`Floor ${patternIndex}`}
       style={{
-        width: size,
-        height: size,
+        width: displaySize,
+        height: displaySize,
         padding: 0,
-        border: selected ? '2px solid var(--vscode-focusBorder, #007fd4)' : '1px solid #555',
+        border: selected ? '2px solid rgba(90, 140, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.15)',
         borderRadius: 3,
         cursor: 'pointer',
         overflow: 'hidden',
@@ -113,7 +102,7 @@ function FloorPatternPreview({ patternIndex, color, selected, onClick }: {
     >
       <canvas
         ref={canvasRef}
-        style={{ width: size, height: size, display: 'block' }}
+        style={{ width: displaySize, height: displaySize, display: 'block' }}
       />
     </button>
   )
@@ -136,7 +125,7 @@ function ColorSlider({ label, value, min, max, onChange }: {
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        style={{ flex: 1, height: 12, accentColor: 'var(--vscode-focusBorder, #007fd4)' }}
+        style={{ flex: 1, height: 12, accentColor: 'rgba(90, 140, 255, 0.8)' }}
       />
       <span style={{ fontSize: '10px', color: '#999', width: 28, textAlign: 'right', flexShrink: 0 }}>{value}</span>
     </div>
@@ -147,20 +136,14 @@ export function EditorToolbar({
   activeTool,
   selectedTileType,
   selectedFurnitureType,
-  selectedFurnitureUid,
   floorColor,
   onToolChange,
   onTileTypeChange,
   onFloorColorChange,
   onFurnitureTypeChange,
-  onDeleteSelected,
-  onUndo,
-  onReset,
-  onSave,
   loadedAssets,
 }: EditorToolbarProps) {
   const [activeCategory, setActiveCategory] = useState<FurnitureCategory>('desks')
-  const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [showColor, setShowColor] = useState(false)
 
   // Build dynamic catalog from loaded assets
@@ -196,95 +179,51 @@ export function EditorToolbar({
   // Wall is TileType 0, floor patterns are 1..patternCount
   const floorPatterns = Array.from({ length: patternCount }, (_, i) => i + 1)
 
+  const thumbSize = 36 // 2x for items
+
+  const isFloorActive = activeTool === EditTool.TILE_PAINT || activeTool === EditTool.EYEDROPPER
+  const isFurnitureActive = activeTool === EditTool.FURNITURE_PLACE
+
   return (
     <div
       style={{
         position: 'absolute',
-        top: 36,
-        left: 8,
+        bottom: 48,
+        left: 10,
         zIndex: 50,
-        background: 'rgba(30,30,46,0.85)',
-        border: '1px solid var(--vscode-editorWidget-border, #454545)',
-        borderRadius: 4,
+        background: 'rgba(30, 30, 46, 0.9)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: 6,
         padding: '6px 8px',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column-reverse',
         gap: 6,
-        maxWidth: 380,
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+        maxWidth: 'calc(100vw - 20px)',
       }}
     >
-      {/* Tool row */}
+      {/* Tool row — at the bottom */}
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         <button
-          style={activeTool === EditTool.SELECT ? activeBtnStyle : btnStyle}
-          onClick={() => onToolChange(EditTool.SELECT)}
-          title="Select furniture"
-        >
-          Select
-        </button>
-        <button
-          style={(activeTool === EditTool.TILE_PAINT || activeTool === EditTool.EYEDROPPER) ? activeBtnStyle : btnStyle}
+          style={isFloorActive ? activeBtnStyle : btnStyle}
           onClick={() => onToolChange(EditTool.TILE_PAINT)}
           title="Paint floor tiles"
         >
           Floor
         </button>
         <button
-          style={activeTool === EditTool.FURNITURE_PLACE ? activeBtnStyle : btnStyle}
+          style={isFurnitureActive ? activeBtnStyle : btnStyle}
           onClick={() => onToolChange(EditTool.FURNITURE_PLACE)}
           title="Place furniture"
         >
-          Place
-        </button>
-        <button
-          style={activeTool === EditTool.ERASER ? activeBtnStyle : btnStyle}
-          onClick={() => onToolChange(EditTool.ERASER)}
-          title="Erase furniture"
-        >
-          Erase
-        </button>
-        <button style={btnStyle} onClick={onUndo} title="Undo (Ctrl+Z)">
-          Undo
-        </button>
-        <button style={btnStyle} onClick={onSave} title="Save layout now">
-          Save
-        </button>
-        <button style={btnStyle} onClick={() => setShowResetConfirm(true)} title="Reset to last saved layout">
-          Reset
+          Furniture
         </button>
       </div>
 
-      {/* Reset confirmation popup */}
-      {showResetConfirm && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '4px 6px',
-          background: 'rgba(80,30,30,0.9)',
-          border: '1px solid #a44',
-          borderRadius: 4,
-        }}>
-          <span style={{ fontSize: '11px', color: '#ecc' }}>Reset to last saved layout?</span>
-          <button
-            style={{ ...btnStyle, background: '#a33', color: '#fff' }}
-            onClick={() => { setShowResetConfirm(false); onReset() }}
-          >
-            Yes
-          </button>
-          <button
-            style={btnStyle}
-            onClick={() => setShowResetConfirm(false)}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Sub-panel: Floor tiles */}
-      {(activeTool === EditTool.TILE_PAINT || activeTool === EditTool.EYEDROPPER) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {/* Wall button + Color toggle + Pick */}
+      {/* Sub-panel: Floor tiles — stacked bottom-to-top via column-reverse */}
+      {isFloorActive && (
+        <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 6 }}>
+          {/* Wall button + Color toggle + Pick — just above tool row */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <button
               onClick={() => onTileTypeChange(TileType.WALL)}
@@ -293,7 +232,7 @@ export function EditorToolbar({
                 width: 48,
                 height: 24,
                 background: '#3A3A5C',
-                border: selectedTileType === TileType.WALL ? '2px solid var(--vscode-focusBorder, #007fd4)' : '1px solid #555',
+                border: selectedTileType === TileType.WALL ? '2px solid rgba(90, 140, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.15)',
                 borderRadius: 3,
                 cursor: 'pointer',
                 padding: 0,
@@ -319,7 +258,7 @@ export function EditorToolbar({
             </button>
           </div>
 
-          {/* Color controls (collapsible) */}
+          {/* Color controls (collapsible) — above Wall/Color/Pick */}
           {showColor && (
             <div style={{
               display: 'flex',
@@ -327,7 +266,7 @@ export function EditorToolbar({
               gap: 3,
               padding: '4px 6px',
               background: 'rgba(20,20,36,0.8)',
-              border: '1px solid #555',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
               borderRadius: 3,
             }}>
               <ColorSlider label="H" value={floorColor.h} min={0} max={360} onChange={(v) => handleColorChange('h', v)} />
@@ -337,8 +276,8 @@ export function EditorToolbar({
             </div>
           )}
 
-          {/* Floor pattern grid */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {/* Floor pattern horizontal carousel — at the top */}
+          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 2 }}>
             {floorPatterns.map((patIdx) => (
               <FloorPatternPreview
                 key={patIdx}
@@ -352,10 +291,10 @@ export function EditorToolbar({
         </div>
       )}
 
-      {/* Sub-panel: Furniture types with category tabs */}
-      {activeTool === EditTool.FURNITURE_PLACE && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {/* Category tabs */}
+      {/* Sub-panel: Furniture — stacked bottom-to-top via column-reverse */}
+      {isFurnitureActive && (
+        <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 4 }}>
+          {/* Category tabs — just above tool row */}
           <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             {getActiveCategories().map((cat) => (
               <button
@@ -367,11 +306,10 @@ export function EditorToolbar({
               </button>
             ))}
           </div>
-          {/* Furniture items in active category */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxHeight: 120, overflowY: 'auto' }}>
+          {/* Furniture items — at the top, single-row horizontal carousel at 2x */}
+          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 2 }}>
             {categoryItems.map((entry) => {
               const cached = getCachedSprite(entry.sprite, 2)
-              const thumbSize = 28
               const isSelected = selectedFurnitureType === entry.type
               return (
                 <button
@@ -382,7 +320,7 @@ export function EditorToolbar({
                     width: thumbSize,
                     height: thumbSize,
                     background: '#2A2A3A',
-                    border: isSelected ? '2px solid var(--vscode-focusBorder, #007fd4)' : '1px solid #555',
+                    border: isSelected ? '2px solid rgba(90, 140, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.15)',
                     borderRadius: 3,
                     cursor: 'pointer',
                     padding: 0,
@@ -398,7 +336,7 @@ export function EditorToolbar({
                       if (!el) return
                       const ctx = el.getContext('2d')
                       if (!ctx) return
-                      const scale = Math.min(thumbSize / cached.width, thumbSize / cached.height) * 0.8
+                      const scale = Math.min(thumbSize / cached.width, thumbSize / cached.height) * 0.85
                       el.width = thumbSize
                       el.height = thumbSize
                       ctx.imageSmoothingEnabled = false
@@ -413,15 +351,6 @@ export function EditorToolbar({
               )
             })}
           </div>
-        </div>
-      )}
-
-      {/* Sub-panel: Selection actions */}
-      {activeTool === EditTool.SELECT && selectedFurnitureUid && (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button style={btnStyle} onClick={onDeleteSelected} title="Delete selected furniture (Del)">
-            Delete
-          </button>
         </div>
       )}
     </div>

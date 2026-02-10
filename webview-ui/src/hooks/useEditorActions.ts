@@ -4,7 +4,7 @@ import type { EditorState } from '../office/editor/editorState.js'
 import { EditTool } from '../office/types.js'
 import { TileType } from '../office/types.js'
 import type { OfficeLayout, EditTool as EditToolType, TileType as TileTypeVal, FloorColor } from '../office/types.js'
-import { paintTile, placeFurniture, removeFurniture, canPlaceFurniture } from '../office/editor/editorActions.js'
+import { paintTile, placeFurniture, removeFurniture, moveFurniture, canPlaceFurniture } from '../office/editor/editorActions.js'
 import { getCatalogEntry } from '../office/layout/furnitureCatalog.js'
 import { defaultZoom } from '../office/toolUtils.js'
 import { vscode } from '../vscodeApi.js'
@@ -12,6 +12,7 @@ import { vscode } from '../vscodeApi.js'
 export interface EditorActions {
   isEditMode: boolean
   editorTick: number
+  isDirty: boolean
   zoom: number
   panRef: React.MutableRefObject<{ x: number; y: number }>
   saveTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
@@ -24,10 +25,12 @@ export interface EditorActions {
   handleFurnitureTypeChange: (type: string) => void // FurnitureType enum or asset ID
   handleDeleteSelected: () => void
   handleUndo: () => void
+  handleRedo: () => void
   handleReset: () => void
   handleSave: () => void
   handleZoomChange: (zoom: number) => void
   handleEditorTileAction: (col: number, row: number) => void
+  handleDragMove: (uid: string, newCol: number, newRow: number) => void
 }
 
 export function useEditorActions(
@@ -36,6 +39,7 @@ export function useEditorActions(
 ): EditorActions {
   const [isEditMode, setIsEditMode] = useState(false)
   const [editorTick, setEditorTick] = useState(0)
+  const [isDirty, setIsDirty] = useState(false)
   const [zoom, setZoom] = useState(defaultZoom)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const panRef = useRef({ x: 0, y: 0 })
@@ -54,10 +58,13 @@ export function useEditorActions(
     }, 500)
   }, [])
 
-  // Apply a layout edit: push undo, rebuild state, save
+  // Apply a layout edit: push undo, clear redo, rebuild state, save, mark dirty
   const applyEdit = useCallback((newLayout: OfficeLayout) => {
     const os = getOfficeState()
     editorState.pushUndo(os.getLayout())
+    editorState.clearRedo()
+    editorState.isDirty = true
+    setIsDirty(true)
     os.rebuildFromLayout(newLayout)
     saveLayout(newLayout)
     setEditorTick((n) => n + 1)
@@ -74,15 +81,22 @@ export function useEditorActions(
       if (!next) {
         editorState.clearSelection()
         editorState.clearGhost()
+        editorState.clearDrag()
       }
       return next
     })
   }, [editorState])
 
+  // Tool toggle: clicking already-active tool deselects it (returns to SELECT)
   const handleToolChange = useCallback((tool: EditToolType) => {
-    editorState.activeTool = tool
+    if (editorState.activeTool === tool) {
+      editorState.activeTool = EditTool.SELECT
+    } else {
+      editorState.activeTool = tool
+    }
     editorState.clearSelection()
     editorState.clearGhost()
+    editorState.clearDrag()
     setEditorTick((n) => n + 1)
   }, [editorState])
 
@@ -116,8 +130,25 @@ export function useEditorActions(
     const prev = editorState.popUndo()
     if (!prev) return
     const os = getOfficeState()
+    // Push current layout to redo stack before restoring
+    editorState.pushRedo(os.getLayout())
     os.rebuildFromLayout(prev)
     saveLayout(prev)
+    editorState.isDirty = true
+    setIsDirty(true)
+    setEditorTick((n) => n + 1)
+  }, [getOfficeState, editorState, saveLayout])
+
+  const handleRedo = useCallback(() => {
+    const next = editorState.popRedo()
+    if (!next) return
+    const os = getOfficeState()
+    // Push current layout to undo stack before restoring
+    editorState.pushUndo(os.getLayout())
+    os.rebuildFromLayout(next)
+    saveLayout(next)
+    editorState.isDirty = true
+    setIsDirty(true)
     setEditorTick((n) => n + 1)
   }, [getOfficeState, editorState, saveLayout])
 
@@ -126,6 +157,7 @@ export function useEditorActions(
     const saved = structuredClone(lastSavedLayoutRef.current)
     applyEdit(saved)
     editorState.reset()
+    setIsDirty(false)
   }, [editorState, applyEdit])
 
   const handleSave = useCallback(() => {
@@ -138,11 +170,22 @@ export function useEditorActions(
     const layout = os.getLayout()
     lastSavedLayoutRef.current = structuredClone(layout)
     vscode.postMessage({ type: 'saveLayout', layout })
-  }, [getOfficeState])
+    editorState.isDirty = false
+    setIsDirty(false)
+  }, [getOfficeState, editorState])
 
   const handleZoomChange = useCallback((newZoom: number) => {
     setZoom(Math.max(1, Math.min(10, newZoom)))
   }, [])
+
+  const handleDragMove = useCallback((uid: string, newCol: number, newRow: number) => {
+    const os = getOfficeState()
+    const layout = os.getLayout()
+    const newLayout = moveFurniture(layout, uid, newCol, newRow)
+    if (newLayout !== layout) {
+      applyEdit(newLayout)
+    }
+  }, [getOfficeState, applyEdit])
 
   const handleEditorTileAction = useCallback((col: number, row: number) => {
     const os = getOfficeState()
@@ -158,18 +201,6 @@ export function useEditorActions(
       if (canPlaceFurniture(layout, type, col, row)) {
         const uid = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
         const newLayout = placeFurniture(layout, { uid, type, col, row })
-        if (newLayout !== layout) {
-          applyEdit(newLayout)
-        }
-      }
-    } else if (editorState.activeTool === EditTool.ERASER) {
-      const hit = layout.furniture.find((f) => {
-        const entry = getCatalogEntry(f.type)
-        if (!entry) return false
-        return col >= f.col && col < f.col + entry.footprintW && row >= f.row && row < f.row + entry.footprintH
-      })
-      if (hit) {
-        const newLayout = removeFurniture(layout, hit.uid)
         if (newLayout !== layout) {
           applyEdit(newLayout)
         }
@@ -203,6 +234,7 @@ export function useEditorActions(
   return {
     isEditMode,
     editorTick,
+    isDirty,
     zoom,
     panRef,
     saveTimerRef,
@@ -215,9 +247,11 @@ export function useEditorActions(
     handleFurnitureTypeChange,
     handleDeleteSelected,
     handleUndo,
+    handleRedo,
     handleReset,
     handleSave,
     handleZoomChange,
     handleEditorTileAction,
+    handleDragMove,
   }
 }

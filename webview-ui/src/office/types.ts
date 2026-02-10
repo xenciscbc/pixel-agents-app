@@ -108,7 +108,6 @@ export const EditTool = {
   TILE_PAINT: 'tile_paint',
   FURNITURE_PLACE: 'furniture_place',
   SELECT: 'select',
-  ERASER: 'eraser',
   EYEDROPPER: 'eyedropper',
 } as const
 export type EditTool = (typeof EditTool)[keyof typeof EditTool]

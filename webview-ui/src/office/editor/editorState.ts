@@ -18,11 +18,23 @@ export class EditorState {
   // Selection
   selectedFurnitureUid: string | null = null
 
-  // Mouse drag state
+  // Mouse drag state (tile paint)
   isDragging = false
 
-  // Undo stack
+  // Undo / Redo stacks
   undoStack: OfficeLayout[] = []
+  redoStack: OfficeLayout[] = []
+
+  // Dirty flag — true when layout differs from last save
+  isDirty = false
+
+  // Drag-to-move state
+  dragUid: string | null = null
+  dragStartCol = 0
+  dragStartRow = 0
+  dragOffsetCol = 0
+  dragOffsetRow = 0
+  isDragMoving = false
 
   pushUndo(layout: OfficeLayout): void {
     this.undoStack.push(layout)
@@ -36,6 +48,21 @@ export class EditorState {
     return this.undoStack.pop() || null
   }
 
+  pushRedo(layout: OfficeLayout): void {
+    this.redoStack.push(layout)
+    if (this.redoStack.length > 50) {
+      this.redoStack.shift()
+    }
+  }
+
+  popRedo(): OfficeLayout | null {
+    return this.redoStack.pop() || null
+  }
+
+  clearRedo(): void {
+    this.redoStack = []
+  }
+
   clearSelection(): void {
     this.selectedFurnitureUid = null
   }
@@ -46,6 +73,20 @@ export class EditorState {
     this.ghostValid = false
   }
 
+  startDrag(uid: string, startCol: number, startRow: number, offsetCol: number, offsetRow: number): void {
+    this.dragUid = uid
+    this.dragStartCol = startCol
+    this.dragStartRow = startRow
+    this.dragOffsetCol = offsetCol
+    this.dragOffsetRow = offsetRow
+    this.isDragMoving = false
+  }
+
+  clearDrag(): void {
+    this.dragUid = null
+    this.isDragMoving = false
+  }
+
   reset(): void {
     this.activeTool = EditTool.SELECT
     this.selectedFurnitureUid = null
@@ -54,5 +95,9 @@ export class EditorState {
     this.ghostValid = false
     this.isDragging = false
     this.undoStack = []
+    this.redoStack = []
+    this.isDirty = false
+    this.dragUid = null
+    this.isDragMoving = false
   }
 }

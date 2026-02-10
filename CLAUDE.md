@@ -16,7 +16,7 @@ VS Code extension with an embedded React webview panel.
 │   └── types.ts              — Shared interfaces (AgentState, PersistedAgent)
 ├── webview-ui/               — Standalone React + TypeScript app (Vite)
 │   ├── src/
-│   │   ├── App.tsx           — Composition root (~105 lines), hooks + components
+│   │   ├── App.tsx           — Composition root, hooks + components + EditActionBar
 │   │   ├── vscodeApi.ts      — acquireVsCodeApi() singleton
 │   │   ├── main.tsx          — React entry point
 │   │   ├── hooks/
@@ -24,7 +24,9 @@ VS Code extension with an embedded React webview panel.
 │   │   │   ├── useEditorActions.ts     — Editor state + all editor callbacks
 │   │   │   └── useEditorKeyboard.ts    — Keyboard shortcut effect
 │   │   ├── components/
-│   │   │   ├── FloatingButtons.tsx     — Top-left button bar + zoom controls
+│   │   │   ├── BottomToolbar.tsx       — Bottom-left bar: + Agent, Layout toggle, Settings gear
+│   │   │   ├── ZoomControls.tsx        — +/- zoom buttons (top-right corner)
+│   │   │   ├── SettingsModal.tsx       — Settings popup (debug toggle, opened from gear button)
 │   │   │   ├── AgentLabels.tsx         — Name labels + status dots above characters
 │   │   │   └── DebugView.tsx           — Card-based debug overlay showing agent tool status
 │   │   └── office/           — Pixel art office UI (see "Office UI" section below)
@@ -233,7 +235,7 @@ All files live under `webview-ui/src/office/`, organized into subdirectories by 
 
 ```
 office/
-  types.ts              — Constants (TILE_SIZE=16, MAP 20x11), interfaces, FurnitureType, EditTool, OfficeLayout, FloorColor, ToolActivity
+  types.ts              — Constants (TILE_SIZE=16, MAP 20x11), interfaces, FurnitureType, EditTool (SELECT, TILE_PAINT, FURNITURE_PLACE, EYEDROPPER), OfficeLayout, FloorColor, ToolActivity
   toolUtils.ts          — STATUS_TO_TOOL mapping, extractToolName(), defaultZoom()
   floorTiles.ts         — Floor tile sprite storage, colorize algorithm, per-pattern+color cache
 
@@ -244,7 +246,7 @@ office/
 
   editor/               — Layout editing tools, state, and UI
     editorActions.ts    — Pure layout manipulation: paintTile, placeFurniture, removeFurniture, moveFurniture, canPlaceFurniture
-    editorState.ts      — Imperative editor state class (tools, ghost preview, selection, undo stack)
+    editorState.ts      — Imperative editor state class (tools, ghost preview, selection, undo/redo stacks, dirty flag, drag-to-move state)
     EditorToolbar.tsx   — React toolbar/palette component for edit mode
     index.ts            — Barrel re-exports
 
@@ -258,11 +260,11 @@ office/
     characters.ts       — Character state machine: idle/walk/type + wander AI (handles seatId=null)
     officeState.ts      — Central game world: layout-aware construction, rebuildFromLayout(), character lifecycle, agent selection + seat reassignment
     gameLoop.ts         — requestAnimationFrame loop with delta time (capped at 0.1s)
-    renderer.ts         — Canvas drawing: tiles, z-sorted furniture + characters, selection outline + seat indicators, edit overlays
+    renderer.ts         — Canvas drawing: tiles, z-sorted furniture + characters, selection outline + seat indicators, edit overlays, delete button
     index.ts            — Barrel re-exports
 
   components/           — React components that render the office
-    OfficeCanvas.tsx    — Canvas ref, ResizeObserver, DPR, mouse hit-testing, agent selection/deselection, seat click reassignment, edit mode interactions
+    OfficeCanvas.tsx    — Canvas ref, ResizeObserver, DPR, mouse hit-testing, agent selection/deselection, seat click reassignment, edit mode interactions, drag-to-move furniture, delete button hit-testing
     ToolOverlay.tsx     — HTML tooltip positioned over hovered character showing tool status
     index.ts            — Barrel re-exports
 ```
@@ -365,15 +367,19 @@ The default layout has 2 desks (2x2 tiles each) with 4 chairs around each = 8 se
 
 Toggle-based edit mode for customizing the office layout:
 
-- **"Edit" button** (top-left, next to + Agent and Sessions) toggles edit mode on/off
-- **Tools**: Select, Floor, Place, Erase, Undo, Save, Reset
+- **"Layout" button** (bottom-left toolbar) toggles edit mode on/off
+- **Implicit SELECT**: Default tool is SELECT (no explicit button). Clicking a tool again deselects it and returns to SELECT.
+- **Toolbar** (bottom-left, above BottomToolbar): Floor and Furniture toggle buttons only. Clicking an active tool deselects it (returns to SELECT). Sub-panels expand above the active tool button.
 - **Floor tool**: Click/drag to paint floor tiles. 7 patterns loaded from `floors.png` (grayscale), colorizable via HSBC sliders. Each pattern shown as 3×3 preview. Wall button for painting walls. "Color" button toggles Hue/Saturation/Brightness/Contrast sliders (Photoshop Colorize style). Per-tile color is baked on paint — changing sliders doesn't affect already-painted tiles.
-- **Place tool**: Click to place furniture from catalog (Desk, Bookshelf, Plant, Cooler, Whiteboard, Chair, PC, Lamp). Ghost preview shows placement validity (green/red tint).
-- **Select tool**: Click furniture to select it (dashed blue border). Press Delete to remove.
-- **Eraser tool**: Click to remove furniture at cursor position
-- **Undo** (Ctrl+Z): Reverts last edit (50-level stack)
-- **Save**: Flushes pending debounced save immediately and snapshots the layout as a checkpoint for Reset
-- **Reset**: Reverts to the last explicitly saved layout (with "Are you sure?" confirmation). The checkpoint is initialized from the persisted layout on load and updated each time Save is clicked.
+- **Furniture tool**: Click to place furniture from catalog. Ghost preview shows placement validity (green/red tint).
+- **Select behavior** (default tool): Click furniture to select it (dashed blue border + red X delete button at top-right corner). Click the X to delete. Press Delete/Backspace to delete. Click empty space to deselect.
+- **Drag-to-move**: In SELECT mode, mouseDown on furniture starts a drag. If cursor moves to a different tile, a ghost preview follows the cursor showing validity. On mouseUp, furniture is moved if valid, otherwise snaps back. If no movement occurs (click), selection is toggled instead.
+- **Delete button**: Red circle with white X rendered on canvas at top-right corner of selected furniture. Hit-tested in device pixel coordinates with small padding.
+- **EditActionBar** (top-center, appears only when dirty): Undo, Redo, Save, Reset buttons. Undo/Redo disabled when their stacks are empty. Reset has inline confirmation ("Reset? Yes/No").
+- **Undo/Redo** (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z): 50-level undo stack. New edits clear the redo stack.
+- **Dirty flag**: Tracks whether layout has been modified since last explicit save. Controls visibility of EditActionBar.
+- **Save**: Flushes pending debounced save immediately, snapshots layout as checkpoint for Reset, clears dirty flag.
+- **Reset**: Reverts to the last explicitly saved layout (with confirmation). Clears undo/redo stacks and dirty flag.
 
 **Layout data model**: `OfficeLayout` = `{ version: 1, cols, rows, tiles: TileType[], furniture: PlacedFurniture[], tileColors?: Array<FloorColor | null> }`. Flat tile array (row-major). Each `PlacedFurniture` has `uid`, `type`, `col`, `row`. `tileColors` is parallel to `tiles`, storing per-tile HSBC color settings (null for walls).
 
@@ -383,7 +389,7 @@ Toggle-based edit mode for customizing the office layout:
 
 **Furniture catalog**: `layout/furnitureCatalog.ts` dynamically builds catalog from loaded assets (if present) via `buildDynamicCatalog()`, otherwise uses hardcoded furniture (backward compatibility). Maps each furniture type/ID to sprite, footprint size, `isDesk` flag, and `category`. `layout/layoutSerializer.ts` generates seats dynamically from chair furniture adjacent to desks.
 
-**Edit mode rendering**: Grid overlay (subtle white lines), ghost preview (semi-transparent sprite with green/red validity tint), selection highlight (dashed blue border). Characters keep animating during editing.
+**Edit mode rendering**: Grid overlay (subtle white lines), ghost preview (semi-transparent sprite with green/red validity tint), selection highlight (dashed blue border), delete button (red circle with X at top-right of selected furniture). Ghost also shown during drag-to-move with the dragged item's sprite. Characters keep animating during editing.
 
 ### Interaction
 
@@ -391,11 +397,8 @@ Toggle-based edit mode for customizing the office layout:
 - **Click** character → toggles selection (white outline glow + seat indicators) AND sends `focusAgent` to focus terminal. Click same agent again to deselect. Click empty space to deselect.
 - **Click available seat** (while agent selected) → reassigns agent to that seat, agent walks there, selection clears
 - **Name labels** float above each character with status dot (blue pulse = active, amber = waiting)
-- **"+ Agent" button** (top-left) creates new terminal + character
-- **"Sessions" button** opens JSONL folder in file explorer
-- **"Edit" button** (top-left) toggles layout editor mode
-- **"Debug" button** (top-left) toggles debug overlay — card-based view showing each agent's tool activity (active/done/permission dots, subagent nesting, waiting status). Toolbar stays visible on top (z-index 50 > debug z-index 40).
-- **Zoom** +/- buttons (top-left) or Ctrl+mousewheel to change integer zoom level (1x–10x)
+- **Bottom toolbar** (bottom-left): "+ Agent" button creates new terminal + character. "Layout" button toggles layout editor mode. Gear button opens settings popup (debug toggle).
+- **Zoom** +/- buttons (top-right) or Ctrl+mousewheel to change integer zoom level (1x–10x)
 - **Pan** middle-mouse-button drag to pan the viewport when zoomed in
 
 ### TypeScript constraints

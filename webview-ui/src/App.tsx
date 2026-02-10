@@ -8,7 +8,8 @@ import { vscode } from './vscodeApi.js'
 import { useExtensionMessages } from './hooks/useExtensionMessages.js'
 import { useEditorActions } from './hooks/useEditorActions.js'
 import { useEditorKeyboard } from './hooks/useEditorKeyboard.js'
-import { FloatingButtons } from './components/FloatingButtons.js'
+import { ZoomControls } from './components/ZoomControls.js'
+import { BottomToolbar } from './components/BottomToolbar.js'
 import { AgentLabels } from './components/AgentLabels.js'
 import { DebugView } from './components/DebugView.js'
 
@@ -21,6 +22,96 @@ function getOfficeState(): OfficeState {
     officeStateRef.current = new OfficeState()
   }
   return officeStateRef.current
+}
+
+const actionBarBtnStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  fontSize: '11px',
+  background: 'rgba(255, 255, 255, 0.08)',
+  color: 'rgba(255, 255, 255, 0.7)',
+  border: '1px solid transparent',
+  borderRadius: 3,
+  cursor: 'pointer',
+}
+
+const actionBarBtnDisabled: React.CSSProperties = {
+  ...actionBarBtnStyle,
+  opacity: 0.35,
+  cursor: 'default',
+}
+
+function EditActionBar({ editor, editorState: es }: { editor: ReturnType<typeof useEditorActions>; editorState: EditorState }) {
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+
+  const undoDisabled = es.undoStack.length === 0
+  const redoDisabled = es.redoStack.length === 0
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 8,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 50,
+        display: 'flex',
+        gap: 4,
+        alignItems: 'center',
+        background: 'rgba(30, 30, 46, 0.9)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: 6,
+        padding: '4px 8px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+      }}
+    >
+      <button
+        style={undoDisabled ? actionBarBtnDisabled : actionBarBtnStyle}
+        onClick={undoDisabled ? undefined : editor.handleUndo}
+        title="Undo (Ctrl+Z)"
+      >
+        Undo
+      </button>
+      <button
+        style={redoDisabled ? actionBarBtnDisabled : actionBarBtnStyle}
+        onClick={redoDisabled ? undefined : editor.handleRedo}
+        title="Redo (Ctrl+Y)"
+      >
+        Redo
+      </button>
+      <button
+        style={actionBarBtnStyle}
+        onClick={editor.handleSave}
+        title="Save layout"
+      >
+        Save
+      </button>
+      {!showResetConfirm ? (
+        <button
+          style={actionBarBtnStyle}
+          onClick={() => setShowResetConfirm(true)}
+          title="Reset to last saved layout"
+        >
+          Reset
+        </button>
+      ) : (
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <span style={{ fontSize: '11px', color: '#ecc' }}>Reset?</span>
+          <button
+            style={{ ...actionBarBtnStyle, background: '#a33', color: '#fff' }}
+            onClick={() => { setShowResetConfirm(false); editor.handleReset() }}
+          >
+            Yes
+          </button>
+          <button
+            style={actionBarBtnStyle}
+            onClick={() => setShowResetConfirm(false)}
+          >
+            No
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function App() {
@@ -46,6 +137,7 @@ function App() {
     editorState,
     editor.handleDeleteSelected,
     editor.handleUndo,
+    editor.handleRedo,
     useCallback(() => setEditorTickForKeyboard((n) => n + 1), []),
   )
 
@@ -113,37 +205,38 @@ function App() {
         isEditMode={editor.isEditMode}
         editorState={editorState}
         onEditorTileAction={editor.handleEditorTileAction}
+        onDeleteSelected={editor.handleDeleteSelected}
+        onDragMove={editor.handleDragMove}
         editorTick={editor.editorTick}
         zoom={editor.zoom}
         onZoomChange={editor.handleZoomChange}
         panRef={editor.panRef}
       />
 
-      <FloatingButtons
+      <ZoomControls zoom={editor.zoom} onZoomChange={editor.handleZoomChange} />
+
+      <BottomToolbar
         isEditMode={editor.isEditMode}
-        isDebugMode={isDebugMode}
-        zoom={editor.zoom}
         onOpenClaude={editor.handleOpenClaude}
         onToggleEditMode={editor.handleToggleEditMode}
+        isDebugMode={isDebugMode}
         onToggleDebugMode={handleToggleDebugMode}
-        onZoomChange={editor.handleZoomChange}
       />
+
+      {editor.isEditMode && editor.isDirty && (
+        <EditActionBar editor={editor} editorState={editorState} />
+      )}
 
       {editor.isEditMode && (
         <EditorToolbar
           activeTool={editorState.activeTool}
           selectedTileType={editorState.selectedTileType}
           selectedFurnitureType={editorState.selectedFurnitureType}
-          selectedFurnitureUid={editorState.selectedFurnitureUid}
           floorColor={editorState.floorColor}
           onToolChange={editor.handleToolChange}
           onTileTypeChange={editor.handleTileTypeChange}
           onFloorColorChange={editor.handleFloorColorChange}
           onFurnitureTypeChange={editor.handleFurnitureTypeChange}
-          onDeleteSelected={editor.handleDeleteSelected}
-          onUndo={editor.handleUndo}
-          onReset={editor.handleReset}
-          onSave={editor.handleSave}
           loadedAssets={loadedAssets}
         />
       )}
