@@ -4,8 +4,8 @@ import type { EditorState } from '../office/editor/editorState.js'
 import { EditTool } from '../office/types.js'
 import { TileType } from '../office/types.js'
 import type { OfficeLayout, EditTool as EditToolType, TileType as TileTypeVal, FloorColor } from '../office/types.js'
-import { paintTile, placeFurniture, removeFurniture, moveFurniture, canPlaceFurniture } from '../office/editor/editorActions.js'
-import { getCatalogEntry } from '../office/layout/furnitureCatalog.js'
+import { paintTile, placeFurniture, removeFurniture, moveFurniture, rotateFurniture, canPlaceFurniture } from '../office/editor/editorActions.js'
+import { getCatalogEntry, getRotatedType } from '../office/layout/furnitureCatalog.js'
 import { defaultZoom } from '../office/toolUtils.js'
 import { vscode } from '../vscodeApi.js'
 
@@ -24,6 +24,7 @@ export interface EditorActions {
   handleFloorColorChange: (color: FloorColor) => void
   handleFurnitureTypeChange: (type: string) => void // FurnitureType enum or asset ID
   handleDeleteSelected: () => void
+  handleRotateSelected: () => void
   handleUndo: () => void
   handleRedo: () => void
   handleReset: () => void
@@ -111,7 +112,13 @@ export function useEditorActions(
   }, [editorState])
 
   const handleFurnitureTypeChange = useCallback((type: string) => {
-    editorState.selectedFurnitureType = type
+    // Clicking the same item deselects it (no ghost), stays in furniture mode
+    if (editorState.selectedFurnitureType === type) {
+      editorState.selectedFurnitureType = ''
+      editorState.clearGhost()
+    } else {
+      editorState.selectedFurnitureType = type
+    }
     setEditorTick((n) => n + 1)
   }, [editorState])
 
@@ -123,6 +130,26 @@ export function useEditorActions(
     if (newLayout !== os.getLayout()) {
       applyEdit(newLayout)
       editorState.clearSelection()
+    }
+  }, [getOfficeState, editorState, applyEdit])
+
+  const handleRotateSelected = useCallback(() => {
+    // If in furniture placement mode, cycle the selected type through the rotation group
+    if (editorState.activeTool === EditTool.FURNITURE_PLACE) {
+      const rotated = getRotatedType(editorState.selectedFurnitureType, 'cw')
+      if (rotated) {
+        editorState.selectedFurnitureType = rotated
+        setEditorTick((n) => n + 1)
+      }
+      return
+    }
+    // Otherwise rotate the selected placed furniture
+    const uid = editorState.selectedFurnitureUid
+    if (!uid) return
+    const os = getOfficeState()
+    const newLayout = rotateFurniture(os.getLayout(), uid, 'cw')
+    if (newLayout !== os.getLayout()) {
+      applyEdit(newLayout)
     }
   }, [getOfficeState, editorState, applyEdit])
 
@@ -198,7 +225,16 @@ export function useEditorActions(
       }
     } else if (editorState.activeTool === EditTool.FURNITURE_PLACE) {
       const type = editorState.selectedFurnitureType
-      if (canPlaceFurniture(layout, type, col, row)) {
+      if (type === '') {
+        // No item selected — act like SELECT (find furniture hit)
+        const hit = layout.furniture.find((f) => {
+          const entry = getCatalogEntry(f.type)
+          if (!entry) return false
+          return col >= f.col && col < f.col + entry.footprintW && row >= f.row && row < f.row + entry.footprintH
+        })
+        editorState.selectedFurnitureUid = hit ? hit.uid : null
+        setEditorTick((n) => n + 1)
+      } else if (canPlaceFurniture(layout, type, col, row)) {
         const uid = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
         const newLayout = placeFurniture(layout, { uid, type, col, row })
         if (newLayout !== layout) {
@@ -246,6 +282,7 @@ export function useEditorActions(
     handleFloorColorChange,
     handleFurnitureTypeChange,
     handleDeleteSelected,
+    handleRotateSelected,
     handleUndo,
     handleRedo,
     handleReset,

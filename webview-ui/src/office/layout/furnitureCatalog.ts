@@ -29,6 +29,8 @@ export interface LoadedAssetData {
     footprintW: number
     footprintH: number
     isDesk: boolean
+    groupId?: string
+    orientation?: string  // 'front' | 'back' | 'left' | 'right'
   }>
   sprites: Record<string, SpriteData>
 }
@@ -72,7 +74,22 @@ export const FURNITURE_CATALOG: CatalogEntryWithCategory[] = [
   { type: FurnitureType.PAINTING_SMALL_3, label: 'Painting Small 3', footprintW: 1, footprintH: 1, sprite: TS_PAINTING_SMALL_3, isDesk: false, category: 'decor' },
 ]
 
+// ── Rotation groups ──────────────────────────────────────────────
+interface RotationGroup {
+  front: string
+  right: string
+  back: string
+  left: string
+}
+
+// Maps any member asset ID → its rotation group
+const rotationGroups = new Map<string, RotationGroup>()
+
+// Internal catalog (includes all variants for getCatalogEntry lookups)
+let internalCatalog: CatalogEntryWithCategory[] | null = null
+
 // Dynamic catalog built from loaded assets (when available)
+// Only includes "front" variants for grouped items (shown in editor palette)
 let dynamicCatalog: CatalogEntryWithCategory[] | null = null
 let dynamicCategories: FurnitureCategory[] | null = null
 
@@ -84,10 +101,8 @@ let dynamicCategories: FurnitureCategory[] | null = null
 export function buildDynamicCatalog(assets: LoadedAssetData): boolean {
   if (!assets?.catalog || !assets?.sprites) return false
 
-  const entries: CatalogEntryWithCategory[] = []
-
-  // Add new exported assets (no hardcoded furniture when custom assets are present)
-  const newAssets = assets.catalog.map((asset) => {
+  // Build all entries (including non-front variants)
+  const allEntries = assets.catalog.map((asset) => {
     const sprite = assets.sprites[asset.id]
     if (!sprite) {
       console.warn(`No sprite data for asset ${asset.id}`)
@@ -104,20 +119,70 @@ export function buildDynamicCatalog(assets: LoadedAssetData): boolean {
     }
   }).filter((e): e is CatalogEntryWithCategory => e !== null)
 
-  entries.push(...newAssets)
+  if (allEntries.length === 0) return false
 
-  if (newAssets.length === 0) return false
+  // Build rotation groups from groupId + orientation metadata
+  rotationGroups.clear()
+  const groupMap = new Map<string, Partial<Record<string, string>>>()
+  for (const asset of assets.catalog) {
+    if (asset.groupId && asset.orientation) {
+      let group = groupMap.get(asset.groupId)
+      if (!group) {
+        group = {}
+        groupMap.set(asset.groupId, group)
+      }
+      group[asset.orientation] = asset.id
+    }
+  }
 
-  dynamicCatalog = entries
-  dynamicCategories = Array.from(new Set(entries.map((e) => e.category)))
+  // Only register complete groups (all 4 orientations present)
+  const nonFrontIds = new Set<string>()
+  for (const members of groupMap.values()) {
+    if (members.front && members.right && members.back && members.left) {
+      const rg: RotationGroup = {
+        front: members.front,
+        right: members.right,
+        back: members.back,
+        left: members.left,
+      }
+      rotationGroups.set(rg.front, rg)
+      rotationGroups.set(rg.right, rg)
+      rotationGroups.set(rg.back, rg)
+      rotationGroups.set(rg.left, rg)
+      // Track non-front IDs to exclude from visible catalog
+      nonFrontIds.add(rg.right)
+      nonFrontIds.add(rg.back)
+      nonFrontIds.add(rg.left)
+    }
+  }
+
+  // Store full internal catalog (all variants — for getCatalogEntry lookups)
+  internalCatalog = allEntries
+
+  // Visible catalog: exclude non-front variants of rotation groups
+  const visibleEntries = allEntries.filter((e) => !nonFrontIds.has(e.type))
+
+  // Strip orientation suffix from labels for front variants in groups
+  for (const entry of visibleEntries) {
+    if (rotationGroups.has(entry.type)) {
+      entry.label = entry.label.replace(/ - Front$/, '')
+    }
+  }
+
+  dynamicCatalog = visibleEntries
+  dynamicCategories = Array.from(new Set(visibleEntries.map((e) => e.category)))
     .filter((c): c is FurnitureCategory => !!c)
     .sort()
 
-  console.log(`✓ Built dynamic catalog with ${newAssets.length} custom assets (hardcoded furniture disabled)`)
+  console.log(`✓ Built dynamic catalog with ${allEntries.length} assets (${visibleEntries.length} visible, ${rotationGroups.size / 4} rotation groups)`)
   return true
 }
 
 export function getCatalogEntry(type: string): CatalogEntryWithCategory | undefined {
+  // Check internal catalog first (includes all variants, e.g., non-front rotations)
+  if (internalCatalog) {
+    return internalCatalog.find((e) => e.type === type)
+  }
   const catalog = dynamicCatalog || FURNITURE_CATALOG
   return catalog.find((e) => e.type === type)
 }
@@ -144,3 +209,22 @@ export const FURNITURE_CATEGORIES: Array<{ id: FurnitureCategory; label: string 
   { id: 'decor', label: 'Decor' },
   { id: 'misc', label: 'Misc' },
 ]
+
+// ── Rotation helpers ─────────────────────────────────────────────
+
+/** Returns the next asset ID in the rotation group (cw or ccw), or null if not rotatable. */
+export function getRotatedType(currentType: string, direction: 'cw' | 'ccw'): string | null {
+  const group = rotationGroups.get(currentType)
+  if (!group) return null
+  const order = [group.front, group.right, group.back, group.left]
+  const idx = order.indexOf(currentType)
+  if (idx === -1) return null
+  const step = direction === 'cw' ? 1 : -1
+  const nextIdx = (idx + step + 4) % 4
+  return order[nextIdx]
+}
+
+/** Returns true if the given furniture type is part of a rotation group. */
+export function isRotatable(type: string): boolean {
+  return rotationGroups.has(type)
+}

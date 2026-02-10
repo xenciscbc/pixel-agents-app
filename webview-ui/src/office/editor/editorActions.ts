@@ -1,6 +1,6 @@
 import { MAP_COLS, MAP_ROWS, TileType } from '../types.js'
 import type { TileType as TileTypeVal, OfficeLayout, PlacedFurniture, FloorColor } from '../types.js'
-import { getCatalogEntry } from '../layout/furnitureCatalog.js'
+import { getCatalogEntry, getRotatedType } from '../layout/furnitureCatalog.js'
 
 /** Paint a single tile with pattern and color. Returns new layout (immutable). */
 export function paintTile(layout: OfficeLayout, col: number, row: number, tileType: TileTypeVal, color?: FloorColor): OfficeLayout {
@@ -47,6 +47,18 @@ export function moveFurniture(layout: OfficeLayout, uid: string, newCol: number,
   return {
     ...layout,
     furniture: layout.furniture.map((f) => (f.uid === uid ? { ...f, col: newCol, row: newRow } : f)),
+  }
+}
+
+/** Rotate furniture to the next orientation. Returns new layout (immutable). */
+export function rotateFurniture(layout: OfficeLayout, uid: string, direction: 'cw' | 'ccw'): OfficeLayout {
+  const item = layout.furniture.find((f) => f.uid === uid)
+  if (!item) return layout
+  const newType = getRotatedType(item.type, direction)
+  if (!newType) return layout
+  return {
+    ...layout,
+    furniture: layout.furniture.map((f) => (f.uid === uid ? { ...f, type: newType } : f)),
   }
 }
 

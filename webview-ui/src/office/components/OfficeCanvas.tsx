@@ -1,11 +1,11 @@
 import { useRef, useEffect, useCallback } from 'react'
 import type { OfficeState } from '../engine/officeState.js'
 import type { EditorState } from '../editor/editorState.js'
-import type { EditorRenderState, SelectionRenderState, DeleteButtonBounds } from '../engine/renderer.js'
+import type { EditorRenderState, SelectionRenderState, DeleteButtonBounds, RotateButtonBounds } from '../engine/renderer.js'
 import { startGameLoop } from '../engine/gameLoop.js'
 import { renderFrame } from '../engine/renderer.js'
 import { TILE_SIZE, MAP_COLS, MAP_ROWS, EditTool } from '../types.js'
-import { getCatalogEntry } from '../layout/furnitureCatalog.js'
+import { getCatalogEntry, isRotatable } from '../layout/furnitureCatalog.js'
 import { canPlaceFurniture } from '../editor/editorActions.js'
 import { vscode } from '../../vscodeApi.js'
 
@@ -17,6 +17,7 @@ interface OfficeCanvasProps {
   editorState: EditorState
   onEditorTileAction: (col: number, row: number) => void
   onDeleteSelected: () => void
+  onRotateSelected: () => void
   onDragMove: (uid: string, newCol: number, newRow: number) => void
   editorTick: number
   zoom: number
@@ -24,15 +25,16 @@ interface OfficeCanvasProps {
   panRef: React.MutableRefObject<{ x: number; y: number }>
 }
 
-export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editorState, onEditorTileAction, onDeleteSelected, onDragMove, editorTick: _editorTick, zoom, onZoomChange, panRef }: OfficeCanvasProps) {
+export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editorState, onEditorTileAction, onDeleteSelected, onRotateSelected, onDragMove, editorTick: _editorTick, zoom, onZoomChange, panRef }: OfficeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const offsetRef = useRef({ x: 0, y: 0 })
   // Middle-mouse pan state (imperative, no re-renders)
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ mouseX: 0, mouseY: 0, panX: 0, panY: 0 })
-  // Delete button bounds (updated each frame by renderer)
+  // Delete/rotate button bounds (updated each frame by renderer)
   const deleteButtonBoundsRef = useRef<DeleteButtonBounds | null>(null)
+  const rotateButtonBoundsRef = useRef<RotateButtonBounds | null>(null)
 
   // Resize canvas backing store to device pixels (no DPR transform on ctx)
   const resizeCanvas = useCallback(() => {
@@ -82,7 +84,9 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
             selectedW: 0,
             selectedH: 0,
             hasSelection: false,
+            isRotatable: false,
             deleteButtonBounds: null,
+            rotateButtonBounds: null,
           }
 
           // Ghost preview for furniture placement
@@ -132,6 +136,7 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
                 editorRender.selectedRow = item.row
                 editorRender.selectedW = entry.footprintW
                 editorRender.selectedH = entry.footprintH
+                editorRender.isRotatable = isRotatable(item.type)
               }
             }
           }
@@ -185,8 +190,9 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
         )
         offsetRef.current = { x: offsetX, y: offsetY }
 
-        // Store delete button bounds for hit-testing
+        // Store delete/rotate button bounds for hit-testing
         deleteButtonBoundsRef.current = editorRender?.deleteButtonBounds ?? null
+        rotateButtonBoundsRef.current = editorRender?.rotateButtonBounds ?? null
       },
     })
 
@@ -238,6 +244,15 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
     return (dx * dx + dy * dy) <= (bounds.radius + 2) * (bounds.radius + 2) // small padding
   }, [])
 
+  // Check if device-pixel coords hit the rotate button
+  const hitTestRotateButton = useCallback((deviceX: number, deviceY: number): boolean => {
+    const bounds = rotateButtonBoundsRef.current
+    if (!bounds) return false
+    const dx = deviceX - bounds.cx
+    const dy = deviceY - bounds.cy
+    return (dx * dx + dy * dy) <= (bounds.radius + 2) * (bounds.radius + 2)
+  }, [])
+
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       // Handle middle-mouse panning
@@ -281,9 +296,9 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
             canvas.style.cursor = 'grabbing'
           } else {
             const pos = screenToWorld(e.clientX, e.clientY)
-            if (pos && hitTestDeleteButton(pos.deviceX, pos.deviceY)) {
+            if (pos && (hitTestDeleteButton(pos.deviceX, pos.deviceY) || hitTestRotateButton(pos.deviceX, pos.deviceY))) {
               canvas.style.cursor = 'pointer'
-            } else if (editorState.activeTool === EditTool.SELECT && tile) {
+            } else if ((editorState.activeTool === EditTool.SELECT || (editorState.activeTool === EditTool.FURNITURE_PLACE && editorState.selectedFurnitureType === '')) && tile) {
               // Check if hovering over furniture
               const layout = officeState.getLayout()
               const hitFurniture = layout.furniture.find((f) => {
@@ -331,7 +346,7 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
       const relY = containerRect ? e.clientY - containerRect.top : pos.screenY
       onHover(hitId, relX, relY)
     },
-    [officeState, onHover, screenToWorld, screenToTile, isEditMode, editorState, onEditorTileAction, panRef, hitTestDeleteButton],
+    [officeState, onHover, screenToWorld, screenToTile, isEditMode, editorState, onEditorTileAction, panRef, hitTestDeleteButton, hitTestRotateButton],
   )
 
   const handleMouseDown = useCallback(
@@ -355,8 +370,12 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
 
       if (!isEditMode) return
 
-      // Check delete button hit first
+      // Check rotate/delete button hit first
       const pos = screenToWorld(e.clientX, e.clientY)
+      if (pos && hitTestRotateButton(pos.deviceX, pos.deviceY)) {
+        onRotateSelected()
+        return
+      }
       if (pos && hitTestDeleteButton(pos.deviceX, pos.deviceY)) {
         onDeleteSelected()
         return
@@ -364,8 +383,10 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
 
       const tile = screenToTile(e.clientX, e.clientY)
 
-      // SELECT tool: check for furniture hit to start drag
-      if (editorState.activeTool === EditTool.SELECT && tile) {
+      // SELECT tool (or furniture tool with nothing selected): check for furniture hit to start drag
+      const actAsSelect = editorState.activeTool === EditTool.SELECT ||
+        (editorState.activeTool === EditTool.FURNITURE_PLACE && editorState.selectedFurnitureType === '')
+      if (actAsSelect && tile) {
         const layout = officeState.getLayout()
         const hitFurniture = layout.furniture.find((f) => {
           const entry = getCatalogEntry(f.type)
@@ -394,7 +415,7 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
         onEditorTileAction(tile.col, tile.row)
       }
     },
-    [officeState, isEditMode, editorState, screenToTile, screenToWorld, onEditorTileAction, onDeleteSelected, hitTestDeleteButton, panRef],
+    [officeState, isEditMode, editorState, screenToTile, screenToWorld, onEditorTileAction, onDeleteSelected, onRotateSelected, hitTestDeleteButton, hitTestRotateButton, panRef],
   )
 
   const handleMouseUp = useCallback(

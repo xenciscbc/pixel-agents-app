@@ -264,6 +264,53 @@ export function renderDeleteButton(
   return { cx, cy, radius }
 }
 
+export function renderRotateButton(
+  ctx: CanvasRenderingContext2D,
+  col: number,
+  row: number,
+  _w: number,
+  _h: number,
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): RotateButtonBounds {
+  const s = TILE_SIZE * zoom
+  // Position to the left of the delete button (which is at top-right corner)
+  const radius = Math.max(6, zoom * 3)
+  const cx = offsetX + col * s - 1
+  const cy = offsetY + row * s - 1
+
+  // Circle background
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(50, 120, 200, 0.85)'
+  ctx.fill()
+
+  // Circular arrow icon
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = Math.max(1.5, zoom * 0.5)
+  ctx.lineCap = 'round'
+  const arcR = radius * 0.45
+  ctx.beginPath()
+  // Draw a 270-degree arc
+  ctx.arc(cx, cy, arcR, -Math.PI * 0.8, Math.PI * 0.7)
+  ctx.stroke()
+  // Draw arrowhead at the end of the arc
+  const endAngle = Math.PI * 0.7
+  const endX = cx + arcR * Math.cos(endAngle)
+  const endY = cy + arcR * Math.sin(endAngle)
+  const arrowSize = radius * 0.35
+  ctx.beginPath()
+  ctx.moveTo(endX + arrowSize * 0.6, endY - arrowSize * 0.3)
+  ctx.lineTo(endX, endY)
+  ctx.lineTo(endX + arrowSize * 0.7, endY + arrowSize * 0.5)
+  ctx.stroke()
+  ctx.restore()
+
+  return { cx, cy, radius }
+}
+
 // ── Speech bubbles ──────────────────────────────────────────────
 
 const BUBBLE_FADE_DURATION = 0.5
@@ -302,7 +349,7 @@ export function renderBubbles(
   }
 }
 
-export interface DeleteButtonBounds {
+export interface ButtonBounds {
   /** Center X in device pixels */
   cx: number
   /** Center Y in device pixels */
@@ -310,6 +357,9 @@ export interface DeleteButtonBounds {
   /** Radius in device pixels */
   radius: number
 }
+
+export type DeleteButtonBounds = ButtonBounds
+export type RotateButtonBounds = ButtonBounds
 
 export interface EditorRenderState {
   showGrid: boolean
@@ -322,8 +372,11 @@ export interface EditorRenderState {
   selectedW: number
   selectedH: number
   hasSelection: boolean
+  isRotatable: boolean
   /** Updated each frame by renderDeleteButton */
   deleteButtonBounds: DeleteButtonBounds | null
+  /** Updated each frame by renderRotateButton */
+  rotateButtonBounds: RotateButtonBounds | null
 }
 
 export interface SelectionRenderState {
@@ -385,8 +438,14 @@ export function renderFrame(
     if (editor.hasSelection) {
       renderSelectionHighlight(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
       editor.deleteButtonBounds = renderDeleteButton(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
+      if (editor.isRotatable) {
+        editor.rotateButtonBounds = renderRotateButton(ctx, editor.selectedCol, editor.selectedRow, editor.selectedW, editor.selectedH, offsetX, offsetY, zoom)
+      } else {
+        editor.rotateButtonBounds = null
+      }
     } else {
       editor.deleteButtonBounds = null
+      editor.rotateButtonBounds = null
     }
   }
 

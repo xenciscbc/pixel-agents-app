@@ -4,6 +4,8 @@ import { OfficeCanvas } from './office/components/OfficeCanvas.js'
 import { ToolOverlay } from './office/components/ToolOverlay.js'
 import { EditorToolbar } from './office/editor/EditorToolbar.js'
 import { EditorState } from './office/editor/editorState.js'
+import { EditTool } from './office/types.js'
+import { isRotatable } from './office/layout/furnitureCatalog.js'
 import { vscode } from './vscodeApi.js'
 import { useExtensionMessages } from './hooks/useExtensionMessages.js'
 import { useEditorActions } from './hooks/useEditorActions.js'
@@ -136,9 +138,11 @@ function App() {
     editor.isEditMode,
     editorState,
     editor.handleDeleteSelected,
+    editor.handleRotateSelected,
     editor.handleUndo,
     editor.handleRedo,
     useCallback(() => setEditorTickForKeyboard((n) => n + 1), []),
+    editor.handleToggleEditMode,
   )
 
   const handleHover = useCallback((agentId: number | null, screenX: number, screenY: number) => {
@@ -180,6 +184,18 @@ function App() {
   // Force dependency on editorTickForKeyboard to propagate keyboard-triggered re-renders
   void editorTickForKeyboard
 
+  // Show "Press R to rotate" hint when a rotatable item is selected or being placed
+  const showRotateHint = editor.isEditMode && (() => {
+    if (editorState.selectedFurnitureUid) {
+      const item = officeState.getLayout().furniture.find((f) => f.uid === editorState.selectedFurnitureUid)
+      if (item && isRotatable(item.type)) return true
+    }
+    if (editorState.activeTool === EditTool.FURNITURE_PLACE && isRotatable(editorState.selectedFurnitureType)) {
+      return true
+    }
+    return false
+  })()
+
   if (!layoutReady) {
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--vscode-foreground)' }}>
@@ -206,6 +222,7 @@ function App() {
         editorState={editorState}
         onEditorTileAction={editor.handleEditorTileAction}
         onDeleteSelected={editor.handleDeleteSelected}
+        onRotateSelected={editor.handleRotateSelected}
         onDragMove={editor.handleDragMove}
         editorTick={editor.editorTick}
         zoom={editor.zoom}
@@ -225,6 +242,27 @@ function App() {
 
       {editor.isEditMode && editor.isDirty && (
         <EditActionBar editor={editor} editorState={editorState} />
+      )}
+
+      {showRotateHint && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: '50%',
+            transform: editor.isDirty ? 'translateX(calc(-50% + 100px))' : 'translateX(-50%)',
+            zIndex: 49,
+            background: 'rgba(50, 120, 200, 0.85)',
+            color: '#fff',
+            fontSize: '10px',
+            padding: '3px 8px',
+            borderRadius: 4,
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Press <b>R</b> to rotate
+        </div>
       )}
 
       {editor.isEditMode && (
