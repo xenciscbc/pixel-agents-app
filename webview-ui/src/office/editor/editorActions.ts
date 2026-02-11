@@ -82,12 +82,29 @@ export function canPlaceFurniture(
   // Build occupied set excluding the item being moved, skipping background tile rows
   const occupied = getPlacementBlockedTiles(layout.furniture, excludeUid)
 
+  // If this item can be placed on surfaces, build set of desk tiles to exclude from collision
+  let deskTiles: Set<string> | null = null
+  if (entry.canPlaceOnSurfaces) {
+    deskTiles = new Set<string>()
+    for (const item of layout.furniture) {
+      if (item.uid === excludeUid) continue
+      const itemEntry = getCatalogEntry(item.type)
+      if (!itemEntry || !itemEntry.isDesk) continue
+      for (let dr = 0; dr < itemEntry.footprintH; dr++) {
+        for (let dc = 0; dc < itemEntry.footprintW; dc++) {
+          deskTiles.add(`${item.col + dc},${item.row + dr}`)
+        }
+      }
+    }
+  }
+
   // Check overlap — also skip the NEW item's own background rows
   const newBgRows = entry.backgroundTiles || 0
   for (let dr = 0; dr < entry.footprintH; dr++) {
     if (dr < newBgRows) continue // new item's background rows can overlap existing items
     for (let dc = 0; dc < entry.footprintW; dc++) {
-      if (occupied.has(`${col + dc},${row + dr}`)) return false
+      const key = `${col + dc},${row + dr}`
+      if (occupied.has(key) && !(deskTiles?.has(key))) return false
     }
   }
 

@@ -17,6 +17,21 @@ export function layoutToTileMap(layout: OfficeLayout): TileTypeVal[][] {
 
 /** Convert placed furniture into renderable FurnitureInstance[] */
 export function layoutToFurnitureInstances(furniture: PlacedFurniture[]): FurnitureInstance[] {
+  // Pre-compute desk zY per tile so surface items can sort in front of desks
+  const deskZByTile = new Map<string, number>()
+  for (const item of furniture) {
+    const entry = getCatalogEntry(item.type)
+    if (!entry || !entry.isDesk) continue
+    const deskZY = item.row * TILE_SIZE + entry.sprite.length
+    for (let dr = 0; dr < entry.footprintH; dr++) {
+      for (let dc = 0; dc < entry.footprintW; dc++) {
+        const key = `${item.col + dc},${item.row + dr}`
+        const prev = deskZByTile.get(key)
+        if (prev === undefined || deskZY > prev) deskZByTile.set(key, deskZY)
+      }
+    }
+  }
+
   const instances: FurnitureInstance[] = []
   for (const item of furniture) {
     const entry = getCatalogEntry(item.type)
@@ -24,12 +39,19 @@ export function layoutToFurnitureInstances(furniture: PlacedFurniture[]): Furnit
     const x = item.col * TILE_SIZE
     const y = item.row * TILE_SIZE
     const spriteH = entry.sprite.length
-    instances.push({
-      sprite: entry.sprite,
-      x,
-      y,
-      zY: y + spriteH,
-    })
+    let zY = y + spriteH
+
+    // Surface items render in front of the desk they sit on
+    if (entry.canPlaceOnSurfaces) {
+      for (let dr = 0; dr < entry.footprintH; dr++) {
+        for (let dc = 0; dc < entry.footprintW; dc++) {
+          const deskZ = deskZByTile.get(`${item.col + dc},${item.row + dr}`)
+          if (deskZ !== undefined && deskZ + 0.5 > zY) zY = deskZ + 0.5
+        }
+      }
+    }
+
+    instances.push({ sprite: entry.sprite, x, y, zY })
   }
   return instances
 }

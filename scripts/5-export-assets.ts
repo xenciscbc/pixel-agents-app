@@ -34,6 +34,7 @@ interface Asset {
   partOfGroup?: boolean
   groupId?: string | null
   orientation?: string
+  canPlaceOnSurfaces?: boolean
   backgroundTiles?: number
 }
 
@@ -51,6 +52,7 @@ interface CatalogEntry {
   colorEditable: boolean
   groupId?: string
   orientation?: string
+  canPlaceOnSurfaces?: boolean
   backgroundTiles?: number
 }
 
@@ -178,6 +180,11 @@ for (const asset of assets) {
       footprintH: asset.footprintH,
       isDesk: asset.isDesk,
       colorEditable: asset.colorEditable,
+    }
+
+    // Surface placement flag
+    if (asset.canPlaceOnSurfaces) {
+      entry.canPlaceOnSurfaces = true
     }
 
     // Background tiles

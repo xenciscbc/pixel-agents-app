@@ -113,9 +113,11 @@ Toggle via "Layout" button. Tools: SELECT (default), Floor paint, Furniture plac
 
 **Loading**: `esbuild.js` copies `webview-ui/public/assets/` → `dist/assets/`. Loader checks bundled path first, falls back to workspace root. PNG → pngjs → SpriteData (2D hex array, alpha≥128 = opaque).
 
-**Catalog**: `furniture-catalog.json` with id, name, label, category, footprint, isDesk, colorEditable, groupId?, orientation?, backgroundTiles?. String-based type system (no enum constraint). Rotation groups: `buildDynamicCatalog()` builds `rotationGroups` Map, shows 1 item per group in editor.
+**Catalog**: `furniture-catalog.json` with id, name, label, category, footprint, isDesk, colorEditable, groupId?, orientation?, canPlaceOnSurfaces?, backgroundTiles?. String-based type system (no enum constraint). Rotation groups: `buildDynamicCatalog()` builds `rotationGroups` Map, shows 1 item per group in editor.
 
 **Background tiles**: `backgroundTiles?: number` on `FurnitureCatalogEntry` — top N footprint rows allow other furniture to be placed on them. Items on background rows render behind the host furniture via z-sort (lower zY). `getPlacementBlockedTiles()` skips bg rows for occupied set; `canPlaceFurniture()` also skips the new item's own bg rows (symmetric placement). Walking is still blocked (`getBlockedTiles()` unchanged). Set via asset-manager.html "Background Tiles" field.
+
+**Surface placement**: `canPlaceOnSurfaces?: boolean` on `FurnitureCatalogEntry` — items like laptops, monitors, mugs can overlap with all tiles of `isDesk` furniture. `canPlaceFurniture()` builds a desk-tile set and excludes it from collision checks for surface items. Z-sort fix: `layoutToFurnitureInstances()` pre-computes desk zY per tile; surface items get `zY = max(spriteBottom, deskZY + 0.5)` so they render in front of the desk. Set via asset-manager.html "Can Place On Surfaces" checkbox. Exported through `5-export-assets.ts` → `furniture-catalog.json`.
 
 **Floor tiles**: `floors.png` (112×16, 7 patterns). Colorize: grayscale → luminance → contrast → brightness → HSL. Cached by (pattern, h, s, b, c). Migration: old layouts auto-mapped to new patterns.
 
