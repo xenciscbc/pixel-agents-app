@@ -22,6 +22,7 @@ export interface EditorActions {
   handleToolChange: (tool: EditToolType) => void
   handleTileTypeChange: (type: TileTypeVal) => void
   handleFloorColorChange: (color: FloorColor) => void
+  handleWallColorChange: (color: FloorColor) => void
   handleSelectedFurnitureColorChange: (color: FloorColor | null) => void
   handleFurnitureTypeChange: (type: string) => void // FurnitureType enum or asset ID
   handleDeleteSelected: () => void
@@ -85,6 +86,7 @@ export function useEditorActions(
         editorState.clearSelection()
         editorState.clearGhost()
         editorState.clearDrag()
+        wallColorEditActiveRef.current = false
       }
       return next
     })
@@ -101,6 +103,7 @@ export function useEditorActions(
     editorState.clearGhost()
     editorState.clearDrag()
     colorEditUidRef.current = null
+    wallColorEditActiveRef.current = false
     setEditorTick((n) => n + 1)
   }, [editorState])
 
@@ -113,6 +116,40 @@ export function useEditorActions(
     editorState.floorColor = color
     setEditorTick((n) => n + 1)
   }, [editorState])
+
+  // Track whether we've already pushed undo for the current wall color editing session
+  const wallColorEditActiveRef = useRef(false)
+
+  const handleWallColorChange = useCallback((color: FloorColor) => {
+    editorState.wallColor = color
+
+    // Update all existing wall tiles to the new color
+    const os = getOfficeState()
+    const layout = os.getLayout()
+    const existingColors = layout.tileColors || new Array(layout.tiles.length).fill(null)
+    const newColors = [...existingColors]
+    let changed = false
+    for (let i = 0; i < layout.tiles.length; i++) {
+      if (layout.tiles[i] === TileType.WALL) {
+        newColors[i] = { ...color }
+        changed = true
+      }
+    }
+    if (changed) {
+      // Push undo only once per editing session (first slider touch)
+      if (!wallColorEditActiveRef.current) {
+        editorState.pushUndo(layout)
+        editorState.clearRedo()
+        wallColorEditActiveRef.current = true
+      }
+      const newLayout = { ...layout, tileColors: newColors }
+      editorState.isDirty = true
+      setIsDirty(true)
+      os.rebuildFromLayout(newLayout)
+      saveLayout(newLayout)
+    }
+    setEditorTick((n) => n + 1)
+  }, [editorState, getOfficeState, saveLayout])
 
   // Track which uid we've already pushed undo for during color editing
   // so dragging sliders doesn't create N undo entries
@@ -263,6 +300,30 @@ export function useEditorActions(
       if (newLayout !== layout) {
         applyEdit(newLayout)
       }
+    } else if (editorState.activeTool === EditTool.WALL_PAINT) {
+      const idx = row * layout.cols + col
+      const isWall = layout.tiles[idx] === TileType.WALL
+
+      // First tile of drag sets direction
+      if (editorState.wallDragAdding === null) {
+        editorState.wallDragAdding = !isWall
+      }
+
+      if (editorState.wallDragAdding) {
+        // Add wall with color
+        const newLayout = paintTile(layout, col, row, TileType.WALL, editorState.wallColor)
+        if (newLayout !== layout) {
+          applyEdit(newLayout)
+        }
+      } else {
+        // Remove wall → paint floor with current floor settings
+        if (isWall) {
+          const newLayout = paintTile(layout, col, row, editorState.selectedTileType, editorState.floorColor)
+          if (newLayout !== layout) {
+            applyEdit(newLayout)
+          }
+        }
+      }
     } else if (editorState.activeTool === EditTool.FURNITURE_PLACE) {
       const type = editorState.selectedFurnitureType
       if (type === '') {
@@ -309,8 +370,12 @@ export function useEditorActions(
         }
         editorState.activeTool = EditTool.TILE_PAINT
       } else if (tile === TileType.WALL) {
-        editorState.selectedTileType = TileType.WALL
-        editorState.activeTool = EditTool.TILE_PAINT
+        // Pick wall color and switch to wall tool
+        const color = layout.tileColors?.[idx]
+        if (color) {
+          editorState.wallColor = { ...color }
+        }
+        editorState.activeTool = EditTool.WALL_PAINT
       }
       setEditorTick((n) => n + 1)
     } else if (editorState.activeTool === EditTool.SELECT) {
@@ -337,6 +402,7 @@ export function useEditorActions(
     handleToolChange,
     handleTileTypeChange,
     handleFloorColorChange,
+    handleWallColorChange,
     handleSelectedFurnitureColorChange,
     handleFurnitureTypeChange,
     handleDeleteSelected,

@@ -9,7 +9,7 @@ export function paintTile(layout: OfficeLayout, col: number, row: number, tileTy
   if (idx < 0 || idx >= layout.tiles.length) return layout
 
   const existingColors = layout.tileColors || new Array(layout.tiles.length).fill(null)
-  const newColor = tileType === TileType.WALL ? null : (color ?? { h: 0, s: 0, b: 0, c: 0 })
+  const newColor = color ?? (tileType === TileType.WALL ? null : { h: 0, s: 0, b: 0, c: 0 })
 
   // Check if anything actually changed
   if (layout.tiles[idx] === tileType) {
@@ -17,7 +17,8 @@ export function paintTile(layout: OfficeLayout, col: number, row: number, tileTy
     if (newColor === null && existingColor === null) return layout
     if (newColor && existingColor &&
       newColor.h === existingColor.h && newColor.s === existingColor.s &&
-      newColor.b === existingColor.b && newColor.c === existingColor.c) return layout
+      newColor.b === existingColor.b && newColor.c === existingColor.c &&
+      !!newColor.colorize === !!existingColor.colorize) return layout
   }
 
   const tiles = [...layout.tiles]
@@ -77,6 +78,16 @@ export function canPlaceFurniture(
   // Check bounds
   if (col < 0 || row < 0 || col + entry.footprintW > MAP_COLS || row + entry.footprintH > MAP_ROWS) {
     return false
+  }
+
+  // Check that no footprint tile is a wall (background rows may overlap walls)
+  const bgRows = entry.backgroundTiles || 0
+  for (let dr = 0; dr < entry.footprintH; dr++) {
+    if (dr < bgRows) continue
+    for (let dc = 0; dc < entry.footprintW; dc++) {
+      const idx = (row + dr) * layout.cols + (col + dc)
+      if (layout.tiles[idx] === TileType.WALL) return false
+    }
   }
 
   // Build occupied set excluding the item being moved, skipping background tile rows

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { EditTool, TileType } from '../types.js'
+import { EditTool } from '../types.js'
 import type { TileType as TileTypeVal, FloorColor } from '../types.js'
 import { getCatalogByCategory, buildDynamicCatalog, getActiveCategories } from '../layout/furnitureCatalog.js'
 import type { FurnitureCategory, LoadedAssetData } from '../layout/furnitureCatalog.js'
@@ -47,9 +47,11 @@ interface EditorToolbarProps {
   selectedFurnitureUid: string | null
   selectedFurnitureColor: FloorColor | null
   floorColor: FloorColor
+  wallColor: FloorColor
   onToolChange: (tool: EditTool) => void
   onTileTypeChange: (type: TileTypeVal) => void
   onFloorColorChange: (color: FloorColor) => void
+  onWallColorChange: (color: FloorColor) => void
   onSelectedFurnitureColorChange: (color: FloorColor | null) => void
   onFurnitureTypeChange: (type: string) => void
   loadedAssets?: LoadedAssetData
@@ -144,15 +146,18 @@ export function EditorToolbar({
   selectedFurnitureUid,
   selectedFurnitureColor,
   floorColor,
+  wallColor,
   onToolChange,
   onTileTypeChange,
   onFloorColorChange,
+  onWallColorChange,
   onSelectedFurnitureColorChange,
   onFurnitureTypeChange,
   loadedAssets,
 }: EditorToolbarProps) {
   const [activeCategory, setActiveCategory] = useState<FurnitureCategory>('desks')
   const [showColor, setShowColor] = useState(false)
+  const [showWallColor, setShowWallColor] = useState(false)
   const [showFurnitureColor, setShowFurnitureColor] = useState(false)
 
   // Build dynamic catalog from loaded assets
@@ -182,6 +187,10 @@ export function EditorToolbar({
     onFloorColorChange({ ...floorColor, [key]: value })
   }, [floorColor, onFloorColorChange])
 
+  const handleWallColorChange = useCallback((key: keyof FloorColor, value: number) => {
+    onWallColorChange({ ...wallColor, [key]: value })
+  }, [wallColor, onWallColorChange])
+
   // For selected furniture: use existing color or default
   const effectiveColor = selectedFurnitureColor ?? DEFAULT_FURNITURE_COLOR
   const handleSelFurnColorChange = useCallback((key: keyof FloorColor, value: number) => {
@@ -197,6 +206,7 @@ export function EditorToolbar({
   const thumbSize = 36 // 2x for items
 
   const isFloorActive = activeTool === EditTool.TILE_PAINT || activeTool === EditTool.EYEDROPPER
+  const isWallActive = activeTool === EditTool.WALL_PAINT
   const isFurnitureActive = activeTool === EditTool.FURNITURE_PLACE || activeTool === EditTool.FURNITURE_PICK
 
   return (
@@ -227,6 +237,13 @@ export function EditorToolbar({
           Floor
         </button>
         <button
+          style={isWallActive ? activeBtnStyle : btnStyle}
+          onClick={() => onToolChange(EditTool.WALL_PAINT)}
+          title="Paint walls (click to toggle)"
+        >
+          Wall
+        </button>
+        <button
           style={isFurnitureActive ? activeBtnStyle : btnStyle}
           onClick={() => onToolChange(EditTool.FURNITURE_PLACE)}
           title="Place furniture"
@@ -238,25 +255,8 @@ export function EditorToolbar({
       {/* Sub-panel: Floor tiles — stacked bottom-to-top via column-reverse */}
       {isFloorActive && (
         <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 6 }}>
-          {/* Wall button + Color toggle + Pick — just above tool row */}
+          {/* Color toggle + Pick — just above tool row */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <button
-              onClick={() => onTileTypeChange(TileType.WALL)}
-              title="Wall"
-              style={{
-                width: 48,
-                height: 24,
-                background: '#3A3A5C',
-                border: selectedTileType === TileType.WALL ? '2px solid rgba(90, 140, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: 3,
-                cursor: 'pointer',
-                padding: 0,
-                fontSize: '10px',
-                color: '#aaa',
-              }}
-            >
-              Wall
-            </button>
             <button
               style={showColor ? activeBtnStyle : btnStyle}
               onClick={() => setShowColor((v) => !v)}
@@ -303,6 +303,40 @@ export function EditorToolbar({
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Sub-panel: Wall — stacked bottom-to-top via column-reverse */}
+      {isWallActive && (
+        <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 6 }}>
+          {/* Color toggle — just above tool row */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button
+              style={showWallColor ? activeBtnStyle : btnStyle}
+              onClick={() => setShowWallColor((v) => !v)}
+              title="Adjust wall color"
+            >
+              Color
+            </button>
+          </div>
+
+          {/* Color controls (collapsible) */}
+          {showWallColor && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              padding: '4px 6px',
+              background: 'rgba(20,20,36,0.8)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 3,
+            }}>
+              <ColorSlider label="H" value={wallColor.h} min={0} max={360} onChange={(v) => handleWallColorChange('h', v)} />
+              <ColorSlider label="S" value={wallColor.s} min={0} max={100} onChange={(v) => handleWallColorChange('s', v)} />
+              <ColorSlider label="B" value={wallColor.b} min={-100} max={100} onChange={(v) => handleWallColorChange('b', v)} />
+              <ColorSlider label="C" value={wallColor.c} min={-100} max={100} onChange={(v) => handleWallColorChange('c', v)} />
+            </div>
+          )}
         </div>
       )}
 

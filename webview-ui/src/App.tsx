@@ -280,9 +280,11 @@ function App() {
             selectedFurnitureUid={selUid}
             selectedFurnitureColor={selColor}
             floorColor={editorState.floorColor}
+            wallColor={editorState.wallColor}
             onToolChange={editor.handleToolChange}
             onTileTypeChange={editor.handleTileTypeChange}
             onFloorColorChange={editor.handleFloorColorChange}
+            onWallColorChange={editor.handleWallColorChange}
             onSelectedFurnitureColorChange={editor.handleSelectedFurnitureColorChange}
             onFurnitureTypeChange={editor.handleFurnitureTypeChange}
             loadedAssets={loadedAssets}

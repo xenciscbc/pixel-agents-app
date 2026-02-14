@@ -281,8 +281,8 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
             }
           }
 
-          // Paint on drag (tile paint tool only, not during furniture drag)
-          if (editorState.isDragging && editorState.activeTool === EditTool.TILE_PAINT && !editorState.dragUid) {
+          // Paint on drag (tile/wall paint tool only, not during furniture drag)
+          if (editorState.isDragging && (editorState.activeTool === EditTool.TILE_PAINT || editorState.activeTool === EditTool.WALL_PAINT) && !editorState.dragUid) {
             onEditorTileAction(tile.col, tile.row)
           }
         } else {
@@ -478,6 +478,7 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
       }
 
       editorState.isDragging = false
+      editorState.wallDragAdding = null
     },
     [editorState, isEditMode, officeState, onDragMove, onEditorSelectionChange],
   )
@@ -545,6 +546,7 @@ export function OfficeCanvas({ officeState, onHover, onClick, isEditMode, editor
   const handleMouseLeave = useCallback(() => {
     isPanningRef.current = false
     editorState.isDragging = false
+    editorState.wallDragAdding = null
     editorState.clearDrag()
     editorState.ghostCol = -1
     editorState.ghostRow = -1

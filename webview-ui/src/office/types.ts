@@ -108,6 +108,7 @@ export type FurnitureType = (typeof FurnitureType)[keyof typeof FurnitureType]
 
 export const EditTool = {
   TILE_PAINT: 'tile_paint',
+  WALL_PAINT: 'wall_paint',
   FURNITURE_PLACE: 'furniture_place',
   FURNITURE_PICK: 'furniture_pick',
   SELECT: 'select',

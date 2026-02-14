@@ -10,6 +10,12 @@ export class EditorState {
   // Floor color settings (applied to new tiles when painting)
   floorColor: FloorColor = { h: 35, s: 30, b: 15, c: 0 }
 
+  // Wall color settings (applied to new wall tiles when painting)
+  wallColor: FloorColor = { h: 240, s: 25, b: 0, c: 0 }
+
+  // Tracks toggle direction during wall drag (true=adding walls, false=removing, null=undecided)
+  wallDragAdding: boolean | null = null
+
   // Picked furniture color (copied by pick tool, applied on placement)
   pickedFurnitureColor: FloorColor | null = null
 
@@ -97,6 +103,7 @@ export class EditorState {
     this.ghostRow = -1
     this.ghostValid = false
     this.isDragging = false
+    this.wallDragAdding = null
     this.undoStack = []
     this.redoStack = []
     this.isDirty = false

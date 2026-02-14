@@ -4,7 +4,7 @@ import { getCachedSprite, getOutlineSprite } from '../sprites/spriteCache.js'
 import { getCharacterSprites, BUBBLE_PERMISSION_SPRITE, BUBBLE_WAITING_SPRITE } from '../sprites/spriteData.js'
 import { getCharacterSprite } from './characters.js'
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js'
-import { hasWallSprites, getWallSprite } from '../wallTiles.js'
+import { hasWallSprites, getWallInstances, wallColorToHex } from '../wallTiles.js'
 
 // ── Render functions ────────────────────────────────────────────
 
@@ -19,16 +19,21 @@ export function renderTileGrid(
 ): void {
   const s = TILE_SIZE * zoom
   const useSpriteFloors = hasFloorSprites()
-  const useWallSprites = hasWallSprites()
 
-  // Pass 1: floor tiles + wall base color
+  // Floor tiles + wall base color
   for (let r = 0; r < MAP_ROWS; r++) {
     for (let c = 0; c < MAP_COLS; c++) {
       const tile = tileMap[r][c]
 
       if (tile === TileType.WALL || !useSpriteFloors) {
         // Wall tiles or fallback: solid color
-        ctx.fillStyle = tile === TileType.WALL ? WALL_COLOR : '#808080'
+        if (tile === TileType.WALL) {
+          const colorIdx = cols ? r * cols + c : r * MAP_COLS + c
+          const wallColor = tileColors?.[colorIdx]
+          ctx.fillStyle = wallColor ? wallColorToHex(wallColor) : WALL_COLOR
+        } else {
+          ctx.fillStyle = '#808080'
+        }
         ctx.fillRect(offsetX + c * s, offsetY + r * s, s, s)
         continue
       }
@@ -42,18 +47,6 @@ export function renderTileGrid(
     }
   }
 
-  // Pass 2: wall sprites in row order (tall sprites extend upward from tile bottom)
-  if (useWallSprites) {
-    for (let r = 0; r < MAP_ROWS; r++) {
-      for (let c = 0; c < MAP_COLS; c++) {
-        if (tileMap[r][c] !== TileType.WALL) continue
-        const wallInfo = getWallSprite(c, r, tileMap)
-        if (!wallInfo) continue
-        const cached = getCachedSprite(wallInfo.sprite, zoom)
-        ctx.drawImage(cached, offsetX + c * s, offsetY + r * s + wallInfo.offsetY * zoom)
-      }
-    }
-  }
 }
 
 interface ZDrawable {
@@ -427,7 +420,7 @@ export function renderFrame(
   const offsetX = Math.floor((canvasWidth - mapW) / 2) + Math.round(panX)
   const offsetY = Math.floor((canvasHeight - mapH) / 2) + Math.round(panY)
 
-  // Draw tiles
+  // Draw tiles (floor + wall base color)
   renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols)
 
   // Seat indicators (below furniture/characters, on top of floor)
@@ -435,10 +428,18 @@ export function renderFrame(
     renderSeatIndicators(ctx, selection.seats, selection.characters, selection.selectedAgentId, selection.hoveredTile, offsetX, offsetY, zoom)
   }
 
-  // Draw furniture + characters (z-sorted)
+  // Build wall instances for z-sorting with furniture and characters
+  const wallInstances = hasWallSprites()
+    ? getWallInstances(tileMap, tileColors, layoutCols)
+    : []
+  const allFurniture = wallInstances.length > 0
+    ? [...wallInstances, ...furniture]
+    : furniture
+
+  // Draw walls + furniture + characters (z-sorted)
   const selectedId = selection?.selectedAgentId ?? null
   const hoveredId = selection?.hoveredAgentId ?? null
-  renderScene(ctx, furniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId)
+  renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId)
 
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom)
