@@ -1,9 +1,37 @@
-out
-dist
-node_modules
-.vscode-test/
-*.vsix
-.claude/
-/logs
-/sprites-export
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Electron-builder output
+release/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code local config
+.claude/commands/
+.claude/settings.local.json
+
+# OpenSpec internal
+.spectra/
+openspec/.vector-search.db
+
+# Logs
+*.log
+
+# Env files
 .env
+.env.*
+
+# Renderer lockfile (managed by pnpm workspace)
+src/renderer/package-lock.json
