@@ -31,9 +31,30 @@ Compared to the original VS Code extension, this standalone version adds:
 - **Live activity tracking** — characters animate based on what the agent is actually doing
 - **Office layout editor** — design your office with floors, walls, and furniture
 - **Speech bubbles** — visual indicators when an agent is waiting or needs permission
-- **Sound notifications** — optional chime when an agent finishes its turn
+- **Sound notifications** — optional chime when an agent needs attention (see below)
 - **Sub-agent visualization** — Task tool sub-agents spawn as separate characters
 - **Persistent layouts** — your office design is saved across sessions
+
+## Agent Status Detection
+
+Agent status is determined by continuously tailing the JSONL transcript file that Claude Code writes during each session. The parser ([transcriptParser.ts](src/main/transcriptParser.ts)) reads each new line and updates the agent's state:
+
+| Status | Condition | Visual |
+|---|---|---|
+| **Active** | Agent is outputting text or executing tools | Character typing animation |
+| **Waiting** | A `turn_duration` system record is received (turn ended), or the agent outputs only text with no tool use for 5 seconds (`TEXT_IDLE_DELAY_MS`) | Speech bubble "waiting" |
+| **Needs Approval** | A tool has been running for 7 seconds (`PERMISSION_TIMER_DELAY_MS`) without completing, and it's not in the exempt list (`Task`, `AskUserQuestion`) | Pulsing red dot + speech bubble |
+| **Idle** | No recent JSONL activity; session may have ended | Grey status dot |
+
+### Sound Notifications
+
+A two-note ascending chime (E5 → E6) plays when an agent enters the **Waiting** state — meaning the agent has finished its turn and is waiting for user input. This typically happens when:
+
+- The agent completes a round of work and waits for the next instruction
+- A `turn_duration` record appears in the JSONL (Claude Code writes this at the end of each turn)
+- The agent outputs only text (no tool calls) and stays idle for 5 seconds
+
+Sound notifications can be toggled on/off in the Settings panel. The sound does **not** play for permission waits — those are indicated visually only (pulsing red dot and speech bubble).
 
 ## Requirements
 
