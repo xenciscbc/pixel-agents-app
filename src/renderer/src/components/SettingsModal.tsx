@@ -12,6 +12,8 @@ interface SettingsModalProps {
   onClose: () => void
   isDebugMode: boolean
   onToggleDebugMode: () => void
+  fontScale: number
+  onFontScaleChange: (scale: number) => void
 }
 
 const menuItemBase: React.CSSProperties = {
@@ -55,7 +57,7 @@ const smallBtnStyle: React.CSSProperties = {
   padding: '0 4px',
 }
 
-export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode, fontScale, onFontScaleChange }: SettingsModalProps) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [soundLocal, setSoundLocal] = useState(isSoundEnabled)
   const [watchDirs, setWatchDirs] = useState<WatchDir[]>([])
@@ -290,6 +292,25 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
               }}
             />
             <span style={{ fontSize: '20px', color: 'rgba(255, 255, 255, 0.5)' }}>sec</span>
+          </div>
+        </div>
+
+        {/* Font Scale */}
+        <div style={{ ...dirItemStyle, padding: '4px 10px' }}>
+          <span style={{ fontSize: '22px' }}>Font Scale</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="range"
+              min={0.5}
+              max={3.0}
+              step={0.1}
+              value={fontScale}
+              onChange={(e) => onFontScaleChange(parseFloat(e.target.value))}
+              style={{ width: 80, accentColor: 'rgba(90, 140, 255, 0.8)' }}
+            />
+            <span style={{ fontSize: '20px', color: 'rgba(255, 255, 255, 0.8)', minWidth: 40, textAlign: 'right' }}>
+              {fontScale.toFixed(1)}x
+            </span>
           </div>
         </div>
 

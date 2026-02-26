@@ -188,6 +188,18 @@ class AgentController {
                     size: (0, settingsStore_1.getAgentListPanelSize)(),
                 });
                 break;
+            case 'setFontScale': {
+                const scale = msg.scale;
+                (0, settingsStore_1.setFontScale)(scale);
+                this.messageSender?.postMessage({ type: 'fontScaleLoaded', fontScale: scale });
+                break;
+            }
+            case 'getFontScale':
+                this.messageSender?.postMessage({
+                    type: 'fontScaleLoaded',
+                    fontScale: (0, settingsStore_1.getFontScale)(),
+                });
+                break;
             case 'selectProjectDir': {
                 const win = this.getWindow();
                 if (!win)
@@ -220,6 +232,10 @@ class AgentController {
         sender.postMessage({
             type: 'agentListPanelSizeLoaded',
             size: (0, settingsStore_1.getAgentListPanelSize)(),
+        });
+        sender.postMessage({
+            type: 'fontScaleLoaded',
+            fontScale: (0, settingsStore_1.getFontScale)(),
         });
         // Load and send assets
         const assetsRoot = this.getAssetsRoot();

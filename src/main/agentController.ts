@@ -16,6 +16,7 @@ import {
 	getWatchDirs, setWatchDirs, getActiveThreshold, setActiveThreshold, getScanInterval, setScanInterval,
 	getViewMode, setViewMode, getDashboardLayout, setDashboardLayout,
 	getAgentListPanelSize, setAgentListPanelSize,
+	getFontScale, setFontScale,
 	type WatchDir,
 } from './settingsStore';
 import {
@@ -170,6 +171,18 @@ export class AgentController {
 					size: getAgentListPanelSize(),
 				});
 				break;
+			case 'setFontScale': {
+				const scale = msg.scale as number;
+				setFontScale(scale);
+				this.messageSender?.postMessage({ type: 'fontScaleLoaded', fontScale: scale });
+				break;
+			}
+			case 'getFontScale':
+				this.messageSender?.postMessage({
+					type: 'fontScaleLoaded',
+					fontScale: getFontScale(),
+				});
+				break;
 			case 'selectProjectDir': {
 				const win = this.getWindow();
 				if (!win) break;
@@ -203,6 +216,10 @@ export class AgentController {
 		sender.postMessage({
 			type: 'agentListPanelSizeLoaded',
 			size: getAgentListPanelSize(),
+		});
+		sender.postMessage({
+			type: 'fontScaleLoaded',
+			fontScale: getFontScale(),
 		});
 
 		// Load and send assets

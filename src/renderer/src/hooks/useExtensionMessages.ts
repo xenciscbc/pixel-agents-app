@@ -50,6 +50,7 @@ export interface ExtensionMessageState {
   agentStatuses: Record<number, string>
   subagentTools: Record<number, Record<string, ToolActivity[]>>
   subagentCharacters: SubagentCharacter[]
+  fontScale: number
   layoutReady: boolean
   loadedAssets?: { catalog: FurnitureAsset[]; sprites: Record<string, string[][]> }
 }
@@ -75,6 +76,7 @@ export function useExtensionMessages(
   const [agentStatuses, setAgentStatuses] = useState<Record<number, string>>({})
   const [subagentTools, setSubagentTools] = useState<Record<number, Record<string, ToolActivity[]>>>({})
   const [subagentCharacters, setSubagentCharacters] = useState<SubagentCharacter[]>([])
+  const [fontScale, setFontScale] = useState(1.0)
   const [layoutReady, setLayoutReady] = useState(false)
   const [loadedAssets, setLoadedAssets] = useState<{ catalog: FurnitureAsset[]; sprites: Record<string, string[][]> } | undefined>()
 
@@ -253,7 +255,7 @@ export function useExtensionMessages(
           return { ...prev, [id]: status }
         })
         os.setAgentActive(id, status === 'active')
-        if (status === 'waiting') {
+        if (status === 'waiting' || status === 'rate_limited') {
           os.showWaitingBubble(id)
           playDoneSound()
         }
@@ -360,6 +362,8 @@ export function useExtensionMessages(
       } else if (msg.type === 'settingsLoaded') {
         const soundOn = msg.soundEnabled as boolean
         setSoundEnabled(soundOn)
+      } else if (msg.type === 'fontScaleLoaded') {
+        setFontScale(msg.fontScale as number)
       } else if (msg.type === 'furnitureAssetsLoaded') {
         try {
           const catalog = msg.catalog as FurnitureAsset[]
@@ -378,5 +382,5 @@ export function useExtensionMessages(
     return () => window.electronAPI.removeListener('message', handler)
   }, [getOfficeState])
 
-  return { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets }
+  return { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, fontScale, layoutReady, loadedAssets }
 }

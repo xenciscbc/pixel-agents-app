@@ -14,6 +14,7 @@ export const SETTINGS_KEY_DEV_PORT = 'devPort';
 export const SETTINGS_KEY_VIEW_MODE = 'viewMode';
 export const SETTINGS_KEY_DASHBOARD_LAYOUT = 'dashboardLayout';
 export const SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = 'agentListPanelSize';
+export const SETTINGS_KEY_FONT_SCALE = 'fontScale';
 
 let settingsCache: Record<string, unknown> | null = null;
 
@@ -111,4 +112,12 @@ export function getAgentListPanelSize(): { width: number; height: number } {
 
 export function setAgentListPanelSize(size: { width: number; height: number }): void {
 	setSetting(SETTINGS_KEY_AGENT_LIST_PANEL_SIZE, size);
+}
+
+export function getFontScale(): number {
+	return getSetting<number>(SETTINGS_KEY_FONT_SCALE, 1.0);
+}
+
+export function setFontScale(scale: number): void {
+	setSetting(SETTINGS_KEY_FONT_SCALE, scale);
 }

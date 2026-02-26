@@ -14,6 +14,7 @@ interface AgentLabelsProps {
   zoom: number
   panRef: React.RefObject<{ x: number; y: number }>
   subagentCharacters: SubagentCharacter[]
+  fontScale: number
 }
 
 function getStatusText(
@@ -24,6 +25,7 @@ function getStatusText(
 ): string {
   const status = agentStatuses[agentId]
   if (status === 'waiting') return 'Waiting'
+  if (status === 'rate_limited') return 'Rest'
 
   const tools = agentTools[agentId]
   if (tools && tools.length > 0) {
@@ -52,7 +54,9 @@ export function AgentLabels({
   zoom,
   panRef,
   subagentCharacters,
+  fontScale,
 }: AgentLabelsProps) {
+  const fs = (base: number) => `${Math.round(base * fontScale)}px`
   const [, setTick] = useState(0)
   const [hoveredId, setHoveredId] = useState<number | null>(null)
 
@@ -104,6 +108,7 @@ export function AgentLabels({
         const statusText = isSub
           ? (subLabelMap.get(id) || 'Subtask')
           : getStatusText(id, agentStatuses, agentTools, ch.isActive)
+        const statusColor = statusText === 'Rest' ? '#e55' : 'rgba(255, 255, 255, 0.6)'
 
         const isHovered = hoveredId === id
 
@@ -141,7 +146,7 @@ export function AgentLabels({
               >
                 <span
                   style={{
-                    fontSize: isSub ? '16px' : '18px',
+                    fontSize: isSub ? fs(16) : fs(18),
                     fontStyle: isSub ? 'italic' : undefined,
                     color: 'var(--vscode-foreground)',
                     background: 'rgba(30,30,46,0.85)',
@@ -155,8 +160,8 @@ export function AgentLabels({
                 </span>
                 <span
                   style={{
-                    fontSize: '14px',
-                    color: 'rgba(255, 255, 255, 0.6)',
+                    fontSize: fs(14),
+                    color: statusColor,
                     background: 'rgba(30,30,46,0.85)',
                     padding: '1px 5px',
                     borderRadius: 2,

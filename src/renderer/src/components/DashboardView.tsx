@@ -14,6 +14,7 @@ interface DashboardViewProps {
   subagentTools: Record<number, Record<string, ToolActivity[]>>
   dashboardLayout: DashboardLayout
   onClickAgent: (id: number) => void
+  fontScale: number
 }
 
 function relativeTime(ts: number | undefined): string {
@@ -36,6 +37,9 @@ function getStatusDisplay(
   if (status === 'waiting') {
     return { text: 'Waiting', color: 'var(--vscode-charts-yellow, #cca700)', isPermission: false, currentTool: null }
   }
+  if (status === 'rate_limited') {
+    return { text: 'Rest', color: '#e55', isPermission: false, currentTool: null }
+  }
 
   const tools = agentTools[agentId]
   if (tools && tools.length > 0) {
@@ -53,7 +57,7 @@ function getStatusDisplay(
 
 function AgentCard({
   agentId, meta, agentStatuses, agentTools,
-  subs, subagentTools, layout, onClick,
+  subs, subagentTools, layout, onClick, fontScale,
 }: {
   agentId: number
   meta: AgentMeta
@@ -63,7 +67,9 @@ function AgentCard({
   subagentTools: Record<number, Record<string, ToolActivity[]>>
   layout: DashboardLayout
   onClick: () => void
+  fontScale: number
 }) {
+  const fs = (base: number) => `${Math.round(base * fontScale)}px`
   const statusInfo = getStatusDisplay(agentId, agentStatuses, agentTools)
 
   return (
@@ -80,13 +86,13 @@ function AgentCard({
     >
       {/* Header: label + status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: '22px', color: 'rgba(255, 255, 255, 0.9)', fontWeight: 'bold', flex: 1 }}>
+        <span style={{ fontSize: fs(22), color: 'rgba(255, 255, 255, 0.9)', flex: 1 }}>
           {meta.label}
         </span>
         <span
           className={statusInfo.isPermission ? 'pixel-agents-pulse' : undefined}
           style={{
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: '18px', color: statusInfo.color,
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: fs(18), color: statusInfo.color,
           }}
         >
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusInfo.color, flexShrink: 0 }} />
@@ -96,7 +102,7 @@ function AgentCard({
 
       {/* Current tool */}
       {statusInfo.currentTool && (
-        <div style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: fs(16), color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           Current: {statusInfo.currentTool}
         </div>
       )}
@@ -104,7 +110,7 @@ function AgentCard({
       {/* Sub-agents */}
       {subs.length > 0 && (
         <div style={{ marginTop: 4 }}>
-          <div style={{ fontSize: '16px', color: 'rgba(255, 255, 255, 0.5)', marginBottom: 2 }}>
+          <div style={{ fontSize: fs(16), color: 'rgba(255, 255, 255, 0.5)', marginBottom: 2 }}>
             Sub-agents: {subs.length}
           </div>
           {subs.map((sub) => {
@@ -113,7 +119,7 @@ function AgentCard({
             return (
               <div key={sub.id} style={{
                 display: 'flex', alignItems: 'center', gap: 4,
-                padding: '1px 0 1px 12px', fontSize: '14px',
+                padding: '1px 0 1px 12px', fontSize: fs(14),
                 color: 'rgba(255, 255, 255, 0.5)',
               }}>
                 <span style={{ flexShrink: 0 }}>└</span>
@@ -134,7 +140,7 @@ function AgentCard({
 
       {/* Last activity */}
       {meta.lastActivity && (
-        <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.35)', marginTop: 6 }}>
+        <div style={{ fontSize: fs(14), color: 'rgba(255, 255, 255, 0.35)', marginTop: 6 }}>
           Last: {relativeTime(meta.lastActivity)}
         </div>
       )}
@@ -144,8 +150,9 @@ function AgentCard({
 
 export function DashboardView({
   agents, agentMetas, agentStatuses, agentTools,
-  subagentCharacters, subagentTools, dashboardLayout, onClickAgent,
+  subagentCharacters, subagentTools, dashboardLayout, onClickAgent, fontScale,
 }: DashboardViewProps) {
+  const fs = (base: number) => `${Math.round(base * fontScale)}px`
   // Force re-render every 30s for relative time updates
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -190,7 +197,7 @@ export function DashboardView({
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         width: '100%', height: '100%',
         background: 'var(--pixel-bg)',
-        color: 'rgba(255, 255, 255, 0.35)', fontSize: '24px',
+        color: 'rgba(255, 255, 255, 0.35)', fontSize: fs(24),
       }}>
         No active agents
       </div>
@@ -209,7 +216,7 @@ export function DashboardView({
           <div key={projectKey} style={{ marginBottom: 24 }}>
             {/* Project header */}
             <div style={{
-              fontSize: '22px', color: 'var(--pixel-green)', fontWeight: 'bold',
+              fontSize: fs(22), color: 'var(--pixel-green)',
               padding: '4px 0 8px', borderBottom: '1px solid var(--pixel-border)',
               marginBottom: 12,
             }}>
@@ -233,6 +240,7 @@ export function DashboardView({
                   subagentTools={subagentTools}
                   layout={dashboardLayout}
                   onClick={() => onClickAgent(id)}
+                  fontScale={fontScale}
                 />
               ))}
             </div>

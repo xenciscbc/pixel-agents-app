@@ -13,6 +13,8 @@ interface BottomToolbarProps {
   onSetViewMode: (mode: ViewMode) => void
   dashboardLayout: DashboardLayout
   onSetDashboardLayout: (layout: DashboardLayout) => void
+  fontScale: number
+  onFontScaleChange: (scale: number) => void
 }
 
 const panelStyle: React.CSSProperties = {
@@ -99,6 +101,8 @@ export function BottomToolbar({
   onSetViewMode,
   dashboardLayout,
   onSetDashboardLayout,
+  fontScale,
+  onFontScaleChange,
 }: BottomToolbarProps) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -173,6 +177,8 @@ export function BottomToolbar({
           onClose={() => setIsSettingsOpen(false)}
           isDebugMode={isDebugMode}
           onToggleDebugMode={onToggleDebugMode}
+          fontScale={fontScale}
+          onFontScaleChange={onFontScaleChange}
         />
       </div>
     </div>

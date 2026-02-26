@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = exports.SETTINGS_KEY_DASHBOARD_LAYOUT = exports.SETTINGS_KEY_VIEW_MODE = exports.SETTINGS_KEY_DEV_PORT = exports.SETTINGS_KEY_SCAN_INTERVAL = exports.SETTINGS_KEY_ACTIVE_THRESHOLD = exports.SETTINGS_KEY_WATCH_DIRS = void 0;
+exports.SETTINGS_KEY_FONT_SCALE = exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = exports.SETTINGS_KEY_DASHBOARD_LAYOUT = exports.SETTINGS_KEY_VIEW_MODE = exports.SETTINGS_KEY_DEV_PORT = exports.SETTINGS_KEY_SCAN_INTERVAL = exports.SETTINGS_KEY_ACTIVE_THRESHOLD = exports.SETTINGS_KEY_WATCH_DIRS = void 0;
 exports.getSetting = getSetting;
 exports.setSetting = setSetting;
 exports.getWatchDirs = getWatchDirs;
@@ -49,6 +49,8 @@ exports.getDashboardLayout = getDashboardLayout;
 exports.setDashboardLayout = setDashboardLayout;
 exports.getAgentListPanelSize = getAgentListPanelSize;
 exports.setAgentListPanelSize = setAgentListPanelSize;
+exports.getFontScale = getFontScale;
+exports.setFontScale = setFontScale;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const electron_1 = require("electron");
@@ -59,6 +61,7 @@ exports.SETTINGS_KEY_DEV_PORT = 'devPort';
 exports.SETTINGS_KEY_VIEW_MODE = 'viewMode';
 exports.SETTINGS_KEY_DASHBOARD_LAYOUT = 'dashboardLayout';
 exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = 'agentListPanelSize';
+exports.SETTINGS_KEY_FONT_SCALE = 'fontScale';
 let settingsCache = null;
 function getSettingsPath() {
     return path.join(electron_1.app.getPath('userData'), 'settings.json');
@@ -137,5 +140,11 @@ function getAgentListPanelSize() {
 }
 function setAgentListPanelSize(size) {
     setSetting(exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE, size);
+}
+function getFontScale() {
+    return getSetting(exports.SETTINGS_KEY_FONT_SCALE, 1.0);
+}
+function setFontScale(scale) {
+    setSetting(exports.SETTINGS_KEY_FONT_SCALE, scale);
 }
 //# sourceMappingURL=settingsStore.js.map

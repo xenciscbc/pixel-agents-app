@@ -10,6 +10,7 @@ interface AgentListPanelProps {
   agentTools: Record<number, ToolActivity[]>
   subagentCharacters: SubagentCharacter[]
   subagentTools: Record<number, Record<string, ToolActivity[]>>
+  fontScale: number
 }
 
 /** Convert encoded dir name back to readable project name. */
@@ -32,6 +33,9 @@ function getStatusInfo(
   const status = agentStatuses[agentId]
   if (status === 'waiting') {
     return { text: 'Waiting', color: 'var(--vscode-charts-yellow, #cca700)', isPermission: false }
+  }
+  if (status === 'rate_limited') {
+    return { text: 'Rest', color: '#e55', isPermission: false }
   }
 
   const tools = agentTools[agentId]
@@ -57,8 +61,9 @@ const RESIZE_HIT = 8
 
 export function AgentListPanel({
   agents, agentMetas, agentStatuses, agentTools,
-  subagentCharacters, subagentTools,
+  subagentCharacters, subagentTools, fontScale,
 }: AgentListPanelProps) {
+  const fs = (base: number) => `${Math.round(base * fontScale)}px`
   const [pos, setPos] = useState({ x: window.innerWidth - DEFAULT_WIDTH - PANEL_MARGIN, y: PANEL_MARGIN })
   const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT })
   const dragging = useRef(false)
@@ -193,7 +198,7 @@ export function AgentListPanel({
       <div
         onMouseDown={handleMouseDown}
         style={{
-          fontSize: '20px',
+          fontSize: fs(20),
           color: 'rgba(255, 255, 255, 0.5)',
           padding: '2px 10px 4px',
           borderBottom: '1px solid var(--pixel-border)',
@@ -213,10 +218,9 @@ export function AgentListPanel({
           <div key={projectKey}>
             {/* Project header */}
             <div style={{
-              fontSize: '18px',
+              fontSize: fs(18),
               color: 'var(--pixel-green)',
               padding: '6px 10px 2px',
-              fontWeight: 'bold',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -237,7 +241,7 @@ export function AgentListPanel({
                     alignItems: 'center',
                     gap: 6,
                     padding: '2px 10px 2px 18px',
-                    fontSize: '18px',
+                    fontSize: fs(18),
                   }}>
                     <span
                       className={statusInfo.isPermission ? 'pixel-agents-pulse' : undefined}
@@ -253,7 +257,7 @@ export function AgentListPanel({
                       {meta.label}
                     </span>
                     <span style={{
-                      fontSize: '14px', color: statusInfo.color, flexShrink: 0,
+                      fontSize: fs(14), color: statusInfo.color, flexShrink: 0,
                       maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {statusInfo.text}
@@ -268,7 +272,7 @@ export function AgentListPanel({
                     return (
                       <div key={sub.id} style={{
                         display: 'flex', alignItems: 'center', gap: 4,
-                        padding: '1px 10px 1px 30px', fontSize: '14px',
+                        padding: '1px 10px 1px 30px', fontSize: fs(14),
                         color: 'rgba(255, 255, 255, 0.55)',
                       }}>
                         <span style={{ flexShrink: 0 }}>└</span>

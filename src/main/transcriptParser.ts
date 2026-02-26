@@ -54,6 +54,24 @@ export function processTranscriptLine(
 	try {
 		const record = JSON.parse(line);
 
+		if (record.type === 'assistant' && record.error === 'rate_limit') {
+			cancelWaitingTimer(agentId, waitingTimers);
+			cancelPermissionTimer(agentId, permissionTimers);
+			if (agent.activeToolIds.size > 0) {
+				agent.activeToolIds.clear();
+				agent.activeToolStatuses.clear();
+				agent.activeToolNames.clear();
+				agent.activeSubagentToolIds.clear();
+				agent.activeSubagentToolNames.clear();
+				sender?.postMessage({ type: 'agentToolsClear', id: agentId });
+			}
+			agent.isWaiting = false;
+			agent.permissionSent = false;
+			agent.hadToolsInTurn = false;
+			sender?.postMessage({ type: 'agentStatus', id: agentId, status: 'rate_limited' });
+			return;
+		}
+
 		if (record.type === 'assistant' && Array.isArray(record.message?.content)) {
 			const blocks = record.message.content as Array<{
 				type: string; id?: string; name?: string; input?: Record<string, unknown>;

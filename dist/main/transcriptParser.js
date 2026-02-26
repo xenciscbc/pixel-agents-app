@@ -70,6 +70,23 @@ function processTranscriptLine(agentId, line, agents, waitingTimers, permissionT
         return;
     try {
         const record = JSON.parse(line);
+        if (record.type === 'assistant' && record.error === 'rate_limit') {
+            (0, timerManager_1.cancelWaitingTimer)(agentId, waitingTimers);
+            (0, timerManager_1.cancelPermissionTimer)(agentId, permissionTimers);
+            if (agent.activeToolIds.size > 0) {
+                agent.activeToolIds.clear();
+                agent.activeToolStatuses.clear();
+                agent.activeToolNames.clear();
+                agent.activeSubagentToolIds.clear();
+                agent.activeSubagentToolNames.clear();
+                sender?.postMessage({ type: 'agentToolsClear', id: agentId });
+            }
+            agent.isWaiting = false;
+            agent.permissionSent = false;
+            agent.hadToolsInTurn = false;
+            sender?.postMessage({ type: 'agentStatus', id: agentId, status: 'rate_limited' });
+            return;
+        }
         if (record.type === 'assistant' && Array.isArray(record.message?.content)) {
             const blocks = record.message.content;
             const hasToolUse = blocks.some(b => b.type === 'tool_use');

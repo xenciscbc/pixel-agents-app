@@ -127,7 +127,7 @@ function App() {
 
   const isEditDirty = useCallback(() => editor.isEditMode && editor.isDirty, [editor.isEditMode, editor.isDirty])
 
-  const { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty)
+  const { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, fontScale, layoutReady, loadedAssets } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('office')
@@ -157,6 +157,10 @@ function App() {
   }, [])
 
   const handleToggleDebugMode = useCallback(() => setIsDebugMode((prev) => !prev), [])
+
+  const handleSetFontScale = useCallback((scale: number) => {
+    vscode.postMessage({ type: 'setFontScale', scale })
+  }, [])
 
   const handleSelectAgent = useCallback((id: number) => {
     vscode.postMessage({ type: 'focusAgent', id })
@@ -329,6 +333,7 @@ function App() {
             zoom={editor.zoom}
             panRef={editor.panRef}
             subagentCharacters={subagentCharacters}
+            fontScale={fontScale}
           />
 
           <AgentListPanel
@@ -338,6 +343,7 @@ function App() {
             agentTools={agentTools}
             subagentCharacters={subagentCharacters}
             subagentTools={subagentTools}
+            fontScale={fontScale}
           />
         </>
       )}
@@ -352,6 +358,7 @@ function App() {
           subagentTools={subagentTools}
           dashboardLayout={dashboardLayout}
           onClickAgent={handleSelectAgent}
+          fontScale={fontScale}
         />
       )}
 
@@ -364,6 +371,8 @@ function App() {
         onSetViewMode={handleSetViewMode}
         dashboardLayout={dashboardLayout}
         onSetDashboardLayout={handleSetDashboardLayout}
+        fontScale={fontScale}
+        onFontScaleChange={handleSetFontScale}
       />
 
       {isDebugMode && (

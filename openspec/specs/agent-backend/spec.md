@@ -37,6 +37,10 @@ TBD - created by archiving change 'pixel-agents-standalone'. Update Purpose afte
 - **WHEN** 在 tools 活躍期間 7 秒內未偵測到新的 JSONL 活動
 - **THEN** 向 renderer 傳送 `agentToolPermission` 訊息
 
+#### Scenario: Rate limit error detection
+- **WHEN** JSONL assistant record 帶有 `error: "rate_limit"`
+- **THEN** 清除該 agent 的所有 active tools、取消 timers，發送 `agentStatus: 'rate_limited'`
+
 ---
 ### Requirement: Project directory scanning
 系統應每隔 1 秒定期掃描專案目錄，以尋找新的 JSONL 文件，用於偵測建立新 session 的 `/clear` 指令。不在已知集合中的新文件應被採用為活躍 agent 的替換 session。

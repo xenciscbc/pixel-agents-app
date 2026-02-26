@@ -85,3 +85,34 @@ DashboardView SHALL 支援 list layout，每個 agent 卡片獨佔一行，以�
 #### Scenario: 定期刷新相對時間顯示
 - **WHEN** dashboard 可見
 - **THEN** 每 30 秒重新計算並更新所有卡片的相對時間文字
+
+---
+
+### Requirement: Agent 卡片狀態顯示 rate_limited
+DashboardView AgentCard SHALL 支援 rate_limited 狀態，顯示為紅色 "Rest"。
+
+#### Scenario: rate_limited agent 卡片
+- **WHEN** agent 狀態為 rate_limited
+- **THEN** 卡片顯示紅色 dot + "Rest" 文字
+
+---
+
+### Requirement: 不使用粗體字
+DashboardView SHALL 不使用 `fontWeight: 'bold'`，因 pixel font 不支援 bold variant。
+
+#### Scenario: Agent label 不使用粗體
+- **WHEN** DashboardView 渲染 agent label
+- **THEN** 不套用 fontWeight: 'bold'
+
+#### Scenario: Project header 不使用粗體
+- **WHEN** DashboardView 渲染 project group header
+- **THEN** 不套用 fontWeight: 'bold'
+
+---
+
+### Requirement: DashboardView 字體縮放
+DashboardView SHALL 根據 `fontScale` 設定縮放所有 fontSize。
+
+#### Scenario: fontScale 套用至所有文字
+- **WHEN** fontScale 為 N
+- **THEN** 所有文字元素的 fontSize 為基礎值乘以 N（四捨五入至整數 px）
