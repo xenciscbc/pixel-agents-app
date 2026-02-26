@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import type { AgentMeta } from '../hooks/useExtensionMessages.js'
 import type { ToolActivity } from '../office/types.js'
+import { vscode } from '../vscodeApi.js'
 
 interface AgentListPanelProps {
   agents: number[]
@@ -11,23 +12,20 @@ interface AgentListPanelProps {
 
 /** Convert encoded dir name back to readable project name.
  *  e.g. "D--work-data-project-go-tt-info" → "tt-info"
- *  e.g. "d--work-data-project-go-cbc-go" → "cbc-go"
+ *  e.g. "/home/user/projects/my-app" → "my-app"
  */
 function projectDisplayName(dirName: string): string {
-  // Take last segment after splitting by common separators
-  const parts = dirName.replace(/^[A-Za-z]--/, '').split('-')
-  // Find a meaningful suffix: skip common prefixes like work, data, project
-  const skip = new Set(['work', 'data', 'project', 'other', 'go', 'java', ''])
-  let startIdx = 0
-  for (let i = 0; i < parts.length; i++) {
-    if (skip.has(parts[i].toLowerCase())) {
-      startIdx = i + 1
-    } else {
-      break
-    }
+  // Real path (contains / or \): take the last segment
+  if (dirName.includes('/') || dirName.includes('\\')) {
+    const segments = dirName.replace(/[\\/]+$/, '').split(/[\\/]/)
+    return segments[segments.length - 1] || dirName
   }
-  const meaningful = parts.slice(startIdx)
-  return meaningful.length > 0 ? meaningful.join('-') : dirName
+  // Encoded dir name (e.g. "D--work-data-project-go-tt-info"):
+  // strip drive letter prefix, take the last 2 segments
+  const stripped = dirName.replace(/^[A-Za-z]--/, '')
+  const parts = stripped.split('-').filter(Boolean)
+  if (parts.length <= 2) return parts.join('-') || dirName
+  return parts.slice(-2).join('-')
 }
 
 function getStatusInfo(
@@ -54,10 +52,29 @@ function getStatusInfo(
   return { text: 'Idle', color: 'rgba(255, 255, 255, 0.35)', isPermission: false }
 }
 
+const PANEL_WIDTH = 188
+const PANEL_MARGIN = 8
+
 export function AgentListPanel({ agents, agentMetas, agentStatuses, agentTools }: AgentListPanelProps) {
-  const [pos, setPos] = useState({ x: 8, y: 8 })
+  const [pos, setPos] = useState({ x: window.innerWidth - PANEL_WIDTH - PANEL_MARGIN, y: PANEL_MARGIN })
   const dragging = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
+  const posLoaded = useRef(false)
+
+  // Request saved position on mount
+  useEffect(() => {
+    const handler = (data: unknown) => {
+      const msg = data as Record<string, unknown>
+      if (msg.type === 'agentListPanelPosLoaded' && msg.pos) {
+        const saved = msg.pos as { x: number; y: number }
+        setPos(saved)
+        posLoaded.current = true
+      }
+    }
+    window.electronAPI.on('message', handler)
+    vscode.postMessage({ type: 'getAgentListPanelPos' })
+    return () => window.electronAPI.removeListener('message', handler)
+  }, [])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     dragging.current = true
@@ -70,7 +87,16 @@ export function AgentListPanel({ agents, agentMetas, agentStatuses, agentTools }
       if (!dragging.current) return
       setPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
     }
-    const handleMouseUp = () => { dragging.current = false }
+    const handleMouseUp = () => {
+      if (dragging.current) {
+        dragging.current = false
+        // Persist position after drag ends
+        setPos((current) => {
+          vscode.postMessage({ type: 'setAgentListPanelPos', pos: current })
+          return current
+        })
+      }
+    }
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
     return () => {

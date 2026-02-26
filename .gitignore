@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build output (tracked by git for reference, but rebuilt before packaging)
+# dist/ is NOT gitignored — electron-builder needs it in the working tree
 
 # Electron-builder output
 release/

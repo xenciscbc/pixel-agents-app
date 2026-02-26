@@ -45,9 +45,31 @@ Compared to the original VS Code extension, this standalone version adds:
 
 ```bash
 pnpm install
-pnpm run build
 pnpm run dev
 ```
+
+## Build & Package
+
+Build all (main + preload + renderer):
+
+```bash
+pnpm run build
+```
+
+Package as portable executable (no installation required):
+
+```bash
+# Windows + Mac
+pnpm run package
+
+# Windows only — outputs release/Pixel Agents *.exe (portable)
+pnpm package:win
+
+# Mac only — outputs release/Pixel Agents *.dmg
+pnpm package:mac
+```
+
+> **Note**: Cross-platform packaging has limitations — building Mac packages requires running on macOS (or using CI with a macOS runner). Windows portable `.exe` can only be built on Windows.
 
 ## Office Assets
 

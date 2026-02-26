@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { vscode } from '../vscodeApi.js'
 import { isSoundEnabled, setSoundEnabled } from '../notificationSound.js'
-
+/** Mirrors WatchDir from src/main/settingsStore.ts */
 interface WatchDir {
   type: 'claude-root' | 'project'
   path: string
@@ -296,21 +296,6 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode 
         {/* Divider */}
         <div style={{ borderTop: '1px solid var(--pixel-border)', margin: '4px 0' }} />
 
-        {/* Original menu items */}
-        <button
-          onClick={() => {
-            vscode.postMessage({ type: 'openSessionsFolder' })
-            onClose()
-          }}
-          onMouseEnter={() => setHovered('sessions')}
-          onMouseLeave={() => setHovered(null)}
-          style={{
-            ...menuItemBase,
-            background: hovered === 'sessions' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-          }}
-        >
-          Open Sessions Folder
-        </button>
         <button
           onClick={() => {
             vscode.postMessage({ type: 'exportLayout' })

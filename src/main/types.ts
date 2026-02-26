@@ -26,6 +26,7 @@ export interface AgentState {
 
 export interface PersistedAgent {
 	id: number;
+	mode?: AgentMode;
 	jsonlFile: string;
 	projectDir: string;
 }

@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir, platform } from 'os';
@@ -56,9 +56,20 @@ function prefix(proc, tag) {
 prefix(vite, 'vite');
 prefix(electron, 'electron');
 
+function killProc(proc) {
+  if (proc.killed) return;
+  if (platform() === 'win32' && proc.pid) {
+    try {
+      execSync(`taskkill /pid ${proc.pid} /T /F`, { stdio: 'ignore' });
+    } catch { /* process may already be gone */ }
+  } else {
+    proc.kill();
+  }
+}
+
 function cleanup(exitCode) {
-  if (!vite.killed) vite.kill();
-  if (!electron.killed) electron.kill();
+  killProc(vite);
+  killProc(electron);
   process.exit(exitCode ?? 0);
 }
 
@@ -67,9 +78,19 @@ vite.on('exit', (code) => {
   cleanup(code);
 });
 
+vite.on('error', (err) => {
+  console.error(`[dev] Vite spawn error:`, err.message);
+  cleanup(1);
+});
+
 electron.on('exit', (code) => {
   console.log(`[dev] Electron exited with code ${code}`);
   cleanup(code);
+});
+
+electron.on('error', (err) => {
+  console.error(`[dev] Electron spawn error:`, err.message);
+  cleanup(1);
 });
 
 process.on('SIGINT', () => cleanup(0));
