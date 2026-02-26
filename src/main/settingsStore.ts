@@ -11,6 +11,9 @@ export const SETTINGS_KEY_WATCH_DIRS = 'watchDirs';
 export const SETTINGS_KEY_ACTIVE_THRESHOLD = 'activeThresholdMinutes';
 export const SETTINGS_KEY_SCAN_INTERVAL = 'scanIntervalSeconds';
 export const SETTINGS_KEY_DEV_PORT = 'devPort';
+export const SETTINGS_KEY_VIEW_MODE = 'viewMode';
+export const SETTINGS_KEY_DASHBOARD_LAYOUT = 'dashboardLayout';
+export const SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = 'agentListPanelSize';
 
 let settingsCache: Record<string, unknown> | null = null;
 
@@ -81,4 +84,31 @@ export function setScanInterval(seconds: number): void {
 
 export function getDevPort(): number {
 	return getSetting<number>(SETTINGS_KEY_DEV_PORT, 5173);
+}
+
+export type ViewMode = 'office' | 'dashboard';
+export type DashboardLayout = 'grid' | 'list';
+
+export function getViewMode(): ViewMode {
+	return getSetting<ViewMode>(SETTINGS_KEY_VIEW_MODE, 'office');
+}
+
+export function setViewMode(mode: ViewMode): void {
+	setSetting(SETTINGS_KEY_VIEW_MODE, mode);
+}
+
+export function getDashboardLayout(): DashboardLayout {
+	return getSetting<DashboardLayout>(SETTINGS_KEY_DASHBOARD_LAYOUT, 'grid');
+}
+
+export function setDashboardLayout(layout: DashboardLayout): void {
+	setSetting(SETTINGS_KEY_DASHBOARD_LAYOUT, layout);
+}
+
+export function getAgentListPanelSize(): { width: number; height: number } {
+	return getSetting<{ width: number; height: number }>(SETTINGS_KEY_AGENT_LIST_PANEL_SIZE, { width: 220, height: 300 });
+}
+
+export function setAgentListPanelSize(size: { width: number; height: number }): void {
+	setSetting(SETTINGS_KEY_AGENT_LIST_PANEL_SIZE, size);
 }

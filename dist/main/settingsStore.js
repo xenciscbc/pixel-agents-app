@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SETTINGS_KEY_DEV_PORT = exports.SETTINGS_KEY_SCAN_INTERVAL = exports.SETTINGS_KEY_ACTIVE_THRESHOLD = exports.SETTINGS_KEY_WATCH_DIRS = void 0;
+exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = exports.SETTINGS_KEY_DASHBOARD_LAYOUT = exports.SETTINGS_KEY_VIEW_MODE = exports.SETTINGS_KEY_DEV_PORT = exports.SETTINGS_KEY_SCAN_INTERVAL = exports.SETTINGS_KEY_ACTIVE_THRESHOLD = exports.SETTINGS_KEY_WATCH_DIRS = void 0;
 exports.getSetting = getSetting;
 exports.setSetting = setSetting;
 exports.getWatchDirs = getWatchDirs;
@@ -43,6 +43,12 @@ exports.setActiveThreshold = setActiveThreshold;
 exports.getScanInterval = getScanInterval;
 exports.setScanInterval = setScanInterval;
 exports.getDevPort = getDevPort;
+exports.getViewMode = getViewMode;
+exports.setViewMode = setViewMode;
+exports.getDashboardLayout = getDashboardLayout;
+exports.setDashboardLayout = setDashboardLayout;
+exports.getAgentListPanelSize = getAgentListPanelSize;
+exports.setAgentListPanelSize = setAgentListPanelSize;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const electron_1 = require("electron");
@@ -50,6 +56,9 @@ exports.SETTINGS_KEY_WATCH_DIRS = 'watchDirs';
 exports.SETTINGS_KEY_ACTIVE_THRESHOLD = 'activeThresholdMinutes';
 exports.SETTINGS_KEY_SCAN_INTERVAL = 'scanIntervalSeconds';
 exports.SETTINGS_KEY_DEV_PORT = 'devPort';
+exports.SETTINGS_KEY_VIEW_MODE = 'viewMode';
+exports.SETTINGS_KEY_DASHBOARD_LAYOUT = 'dashboardLayout';
+exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = 'agentListPanelSize';
 let settingsCache = null;
 function getSettingsPath() {
     return path.join(electron_1.app.getPath('userData'), 'settings.json');
@@ -110,5 +119,23 @@ function setScanInterval(seconds) {
 }
 function getDevPort() {
     return getSetting(exports.SETTINGS_KEY_DEV_PORT, 5173);
+}
+function getViewMode() {
+    return getSetting(exports.SETTINGS_KEY_VIEW_MODE, 'office');
+}
+function setViewMode(mode) {
+    setSetting(exports.SETTINGS_KEY_VIEW_MODE, mode);
+}
+function getDashboardLayout() {
+    return getSetting(exports.SETTINGS_KEY_DASHBOARD_LAYOUT, 'grid');
+}
+function setDashboardLayout(layout) {
+    setSetting(exports.SETTINGS_KEY_DASHBOARD_LAYOUT, layout);
+}
+function getAgentListPanelSize() {
+    return getSetting(exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE, { width: 220, height: 300 });
+}
+function setAgentListPanelSize(size) {
+    setSetting(exports.SETTINGS_KEY_AGENT_LIST_PANEL_SIZE, size);
 }
 //# sourceMappingURL=settingsStore.js.map

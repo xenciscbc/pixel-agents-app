@@ -37,8 +37,6 @@ exports.AgentController = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
-const crypto = __importStar(require("crypto"));
-const child_process_1 = require("child_process");
 const electron_1 = require("electron");
 const sessionWatcher_1 = require("./sessionWatcher");
 const fileWatcher_1 = require("./fileWatcher");
@@ -51,9 +49,6 @@ class AgentController {
     getWindow;
     nextAgentId = { current: 1 };
     agents = new Map();
-    activeAgentId = { current: null };
-    knownJsonlFiles = new Set();
-    projectScanTimer = { current: null };
     fileWatchers = new Map();
     pollingTimers = new Map();
     waitingTimers = new Map();
@@ -84,35 +79,12 @@ class AgentController {
         };
         return this.sender;
     }
-    getProjectDir() {
-        return (0, settingsStore_1.getSetting)(constants_1.SETTINGS_KEY_PROJECT_DIR, null);
-    }
-    getProjectDirPath(cwd) {
-        const workspacePath = cwd || this.getProjectDir();
-        if (!workspacePath)
-            return null;
-        const dirName = workspacePath.replace(/[:\\/]/g, '-');
-        return path.join(os.homedir(), '.claude', 'projects', dirName);
-    }
-    async selectProjectDirectory() {
-        const win = this.getWindow();
-        if (!win)
-            return null;
-        const result = await electron_1.dialog.showOpenDialog(win, {
-            properties: ['openDirectory'],
-            title: 'Select Project Directory',
-        });
-        if (result.canceled || result.filePaths.length === 0)
-            return null;
-        const dir = result.filePaths[0];
-        (0, settingsStore_1.setSetting)(constants_1.SETTINGS_KEY_PROJECT_DIR, dir);
-        return dir;
-    }
     persistAgents = () => {
         const persisted = [];
         for (const agent of this.agents.values()) {
             persisted.push({
                 id: agent.id,
+                mode: agent.mode,
                 jsonlFile: agent.jsonlFile,
                 projectDir: agent.projectDir,
             });
@@ -124,9 +96,6 @@ class AgentController {
         switch (msg.type) {
             case 'webviewReady':
                 await this.handleWebviewReady();
-                break;
-            case 'openClaude':
-                this.handleOpenClaude();
                 break;
             case 'closeAgent':
                 this.handleCloseAgent(msg.id);
@@ -197,6 +166,28 @@ class AgentController {
                 (0, settingsStore_1.setScanInterval)(msg.seconds);
                 this.sessionWatcher.restartTimer();
                 break;
+            case 'setViewMode':
+                (0, settingsStore_1.setViewMode)(msg.mode);
+                break;
+            case 'setDashboardLayout':
+                (0, settingsStore_1.setDashboardLayout)(msg.layout);
+                break;
+            case 'getViewModeSettings':
+                this.messageSender?.postMessage({
+                    type: 'viewModeSettingsLoaded',
+                    viewMode: (0, settingsStore_1.getViewMode)(),
+                    dashboardLayout: (0, settingsStore_1.getDashboardLayout)(),
+                });
+                break;
+            case 'setAgentListPanelSize':
+                (0, settingsStore_1.setAgentListPanelSize)(msg.size);
+                break;
+            case 'getAgentListPanelSize':
+                this.messageSender?.postMessage({
+                    type: 'agentListPanelSizeLoaded',
+                    size: (0, settingsStore_1.getAgentListPanelSize)(),
+                });
+                break;
             case 'selectProjectDir': {
                 const win = this.getWindow();
                 if (!win)
@@ -221,6 +212,15 @@ class AgentController {
         // Send settings
         const soundEnabled = (0, settingsStore_1.getSetting)(constants_1.SETTINGS_KEY_SOUND_ENABLED, true);
         sender.postMessage({ type: 'settingsLoaded', soundEnabled });
+        sender.postMessage({
+            type: 'viewModeSettingsLoaded',
+            viewMode: (0, settingsStore_1.getViewMode)(),
+            dashboardLayout: (0, settingsStore_1.getDashboardLayout)(),
+        });
+        sender.postMessage({
+            type: 'agentListPanelSizeLoaded',
+            size: (0, settingsStore_1.getAgentListPanelSize)(),
+        });
         // Load and send assets
         const assetsRoot = this.getAssetsRoot();
         if (assetsRoot) {
@@ -247,74 +247,6 @@ class AgentController {
         // Start session watcher for observe mode
         this.startWatching();
     }
-    handleOpenClaude() {
-        const sender = this.messageSender;
-        const cwd = this.getProjectDir();
-        const projectDir = this.getProjectDirPath(cwd || undefined);
-        if (!projectDir) {
-            console.log('[Pixel Agents] No project dir, cannot track agent');
-            return;
-        }
-        const sessionId = crypto.randomUUID();
-        const expectedFile = path.join(projectDir, `${sessionId}.jsonl`);
-        this.knownJsonlFiles.add(expectedFile);
-        const id = this.nextAgentId.current++;
-        // Spawn Claude CLI
-        let proc = null;
-        try {
-            proc = (0, child_process_1.spawn)('claude', ['--session-id', sessionId], {
-                cwd: cwd || undefined,
-                shell: true,
-                stdio: 'pipe',
-            });
-            proc.on('exit', () => {
-                this.handleProcessExit(id);
-            });
-            proc.on('error', (err) => {
-                console.error(`[Pixel Agents] Agent ${id} spawn error:`, err);
-                this.handleProcessExit(id);
-            });
-        }
-        catch (err) {
-            console.error('[Pixel Agents] Failed to spawn claude:', err);
-            return;
-        }
-        const agent = {
-            id,
-            mode: 'managed',
-            processRef: proc,
-            projectDir,
-            jsonlFile: expectedFile,
-            fileOffset: 0,
-            lineBuffer: '',
-            activeToolIds: new Set(),
-            activeToolStatuses: new Map(),
-            activeToolNames: new Map(),
-            activeSubagentToolIds: new Map(),
-            activeSubagentToolNames: new Map(),
-            isWaiting: false,
-            permissionSent: false,
-            hadToolsInTurn: false,
-        };
-        this.agents.set(id, agent);
-        this.activeAgentId.current = id;
-        this.persistAgents();
-        sender?.postMessage({ type: 'agentCreated', id, label: `Agent #${id}`, mode: 'managed', projectDir });
-        (0, fileWatcher_1.ensureProjectScan)(projectDir, this.knownJsonlFiles, this.projectScanTimer, this.activeAgentId, this.nextAgentId, this.agents, this.fileWatchers, this.pollingTimers, this.waitingTimers, this.permissionTimers, sender, this.persistAgents);
-        // Poll for JSONL file
-        const pollTimer = setInterval(() => {
-            try {
-                if (fs.existsSync(agent.jsonlFile)) {
-                    clearInterval(pollTimer);
-                    this.jsonlPollTimers.delete(id);
-                    (0, fileWatcher_1.startFileWatching)(id, agent.jsonlFile, this.agents, this.fileWatchers, this.pollingTimers, this.waitingTimers, this.permissionTimers, sender);
-                    (0, fileWatcher_1.readNewLines)(id, this.agents, this.waitingTimers, this.permissionTimers, sender);
-                }
-            }
-            catch { /* file may not exist yet */ }
-        }, constants_1.JSONL_POLL_INTERVAL_MS);
-        this.jsonlPollTimers.set(id, pollTimer);
-    }
     handleCloseAgent(agentId) {
         const agent = this.agents.get(agentId);
         if (!agent)
@@ -325,15 +257,8 @@ class AgentController {
             }
             catch { /* already dead */ }
         }
-        // handleProcessExit will clean up
-    }
-    handleProcessExit(agentId) {
-        const sender = this.messageSender;
-        if (this.activeAgentId.current === agentId) {
-            this.activeAgentId.current = null;
-        }
         this.removeAgent(agentId);
-        sender?.postMessage({ type: 'agentClosed', id: agentId });
+        this.messageSender?.postMessage({ type: 'agentClosed', id: agentId });
     }
     removeAgent(agentId) {
         const agent = this.agents.get(agentId);
@@ -367,7 +292,7 @@ class AgentController {
                 continue;
             const agent = {
                 id: p.id,
-                mode: 'managed',
+                mode: p.mode || 'managed',
                 processRef: null, // No running process — monitor-only mode
                 projectDir: p.projectDir,
                 jsonlFile: p.jsonlFile,
@@ -383,7 +308,6 @@ class AgentController {
                 hadToolsInTurn: false,
             };
             this.agents.set(p.id, agent);
-            this.knownJsonlFiles.add(p.jsonlFile);
             if (p.id > maxId)
                 maxId = p.id;
             try {
@@ -560,10 +484,6 @@ class AgentController {
                 catch { /* ignore */ }
             }
             this.removeAgent(id);
-        }
-        if (this.projectScanTimer.current) {
-            clearInterval(this.projectScanTimer.current);
-            this.projectScanTimer.current = null;
         }
     }
 }

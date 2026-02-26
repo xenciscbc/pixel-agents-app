@@ -14,6 +14,8 @@ import { loadLayout, writeLayoutToFile, readLayoutFromFile, watchLayoutFile, Lay
 import {
 	getSetting, setSetting,
 	getWatchDirs, setWatchDirs, getActiveThreshold, setActiveThreshold, getScanInterval, setScanInterval,
+	getViewMode, setViewMode, getDashboardLayout, setDashboardLayout,
+	getAgentListPanelSize, setAgentListPanelSize,
 	type WatchDir,
 } from './settingsStore';
 import {
@@ -146,6 +148,28 @@ export class AgentController {
 				setScanInterval(msg.seconds as number);
 				this.sessionWatcher.restartTimer();
 				break;
+			case 'setViewMode':
+				setViewMode(msg.mode as 'office' | 'dashboard');
+				break;
+			case 'setDashboardLayout':
+				setDashboardLayout(msg.layout as 'grid' | 'list');
+				break;
+			case 'getViewModeSettings':
+				this.messageSender?.postMessage({
+					type: 'viewModeSettingsLoaded',
+					viewMode: getViewMode(),
+					dashboardLayout: getDashboardLayout(),
+				});
+				break;
+			case 'setAgentListPanelSize':
+				setAgentListPanelSize(msg.size as { width: number; height: number });
+				break;
+			case 'getAgentListPanelSize':
+				this.messageSender?.postMessage({
+					type: 'agentListPanelSizeLoaded',
+					size: getAgentListPanelSize(),
+				});
+				break;
 			case 'selectProjectDir': {
 				const win = this.getWindow();
 				if (!win) break;
@@ -171,6 +195,15 @@ export class AgentController {
 		// Send settings
 		const soundEnabled = getSetting<boolean>(SETTINGS_KEY_SOUND_ENABLED, true);
 		sender.postMessage({ type: 'settingsLoaded', soundEnabled });
+		sender.postMessage({
+			type: 'viewModeSettingsLoaded',
+			viewMode: getViewMode(),
+			dashboardLayout: getDashboardLayout(),
+		});
+		sender.postMessage({
+			type: 'agentListPanelSizeLoaded',
+			size: getAgentListPanelSize(),
+		});
 
 		// Load and send assets
 		const assetsRoot = this.getAssetsRoot();

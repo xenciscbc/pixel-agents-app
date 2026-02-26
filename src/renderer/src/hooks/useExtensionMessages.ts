@@ -39,6 +39,7 @@ export interface AgentMeta {
   label: string
   mode: 'observe' | 'managed'
   projectDir: string
+  lastActivity?: number
 }
 
 export interface ExtensionMessageState {
@@ -84,6 +85,14 @@ export function useExtensionMessages(
     // Buffer agents from existingAgents until layout is loaded
     let pendingAgents: Array<{ id: number; palette?: number; hueShift?: number; seatId?: string }> = []
 
+    const touchLastActivity = (id: number) => {
+      setAgentMetas((prev) => {
+        const meta = prev[id]
+        if (!meta) return prev
+        return { ...prev, [id]: { ...meta, lastActivity: Date.now() } }
+      })
+    }
+
     const handler = (data: unknown) => {
       const msg = data as Record<string, unknown>
       const os = getOfficeState()
@@ -119,7 +128,7 @@ export function useExtensionMessages(
         const mode = (msg.mode as 'observe' | 'managed') || 'managed'
         const projectDir = (msg.projectDir as string) || ''
         setAgents((prev) => (prev.includes(id) ? prev : [...prev, id]))
-        setAgentMetas((prev) => ({ ...prev, [id]: { label, mode, projectDir } }))
+        setAgentMetas((prev) => ({ ...prev, [id]: { label, mode, projectDir, lastActivity: Date.now() } }))
         setSelectedAgent(id)
         os.addAgent(id)
         saveAgentSeats(os)
@@ -175,6 +184,7 @@ export function useExtensionMessages(
         })
       } else if (msg.type === 'agentToolStart') {
         const id = msg.id as number
+        touchLastActivity(id)
         const toolId = msg.toolId as string
         const status = msg.status as string
         setAgentTools((prev) => {
@@ -197,6 +207,7 @@ export function useExtensionMessages(
         }
       } else if (msg.type === 'agentToolDone') {
         const id = msg.id as number
+        touchLastActivity(id)
         const toolId = msg.toolId as string
         setAgentTools((prev) => {
           const list = prev[id]
@@ -230,6 +241,7 @@ export function useExtensionMessages(
         setSelectedAgent(id)
       } else if (msg.type === 'agentStatus') {
         const id = msg.id as number
+        touchLastActivity(id)
         const status = msg.status as string
         setAgentStatuses((prev) => {
           if (status === 'active') {

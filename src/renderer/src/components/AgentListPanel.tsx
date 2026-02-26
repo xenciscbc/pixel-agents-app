@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
-import type { AgentMeta } from '../hooks/useExtensionMessages.js'
+import type { AgentMeta, SubagentCharacter } from '../hooks/useExtensionMessages.js'
 import type { ToolActivity } from '../office/types.js'
 import { vscode } from '../vscodeApi.js'
 
@@ -8,20 +8,16 @@ interface AgentListPanelProps {
   agentMetas: Record<number, AgentMeta>
   agentStatuses: Record<number, string>
   agentTools: Record<number, ToolActivity[]>
+  subagentCharacters: SubagentCharacter[]
+  subagentTools: Record<number, Record<string, ToolActivity[]>>
 }
 
-/** Convert encoded dir name back to readable project name.
- *  e.g. "D--work-data-project-go-tt-info" → "tt-info"
- *  e.g. "/home/user/projects/my-app" → "my-app"
- */
-function projectDisplayName(dirName: string): string {
-  // Real path (contains / or \): take the last segment
+/** Convert encoded dir name back to readable project name. */
+export function projectDisplayName(dirName: string): string {
   if (dirName.includes('/') || dirName.includes('\\')) {
     const segments = dirName.replace(/[\\/]+$/, '').split(/[\\/]/)
     return segments[segments.length - 1] || dirName
   }
-  // Encoded dir name (e.g. "D--work-data-project-go-tt-info"):
-  // strip drive letter prefix, take the last 2 segments
   const stripped = dirName.replace(/^[A-Za-z]--/, '')
   const parts = stripped.split('-').filter(Boolean)
   if (parts.length <= 2) return parts.join('-') || dirName
@@ -52,47 +48,82 @@ function getStatusInfo(
   return { text: 'Idle', color: 'rgba(255, 255, 255, 0.35)', isPermission: false }
 }
 
-const PANEL_WIDTH = 188
+const DEFAULT_WIDTH = 220
+const DEFAULT_HEIGHT = 300
+const MIN_WIDTH = 160
+const MIN_HEIGHT = 120
 const PANEL_MARGIN = 8
+const RESIZE_HIT = 8
 
-export function AgentListPanel({ agents, agentMetas, agentStatuses, agentTools }: AgentListPanelProps) {
-  const [pos, setPos] = useState({ x: window.innerWidth - PANEL_WIDTH - PANEL_MARGIN, y: PANEL_MARGIN })
+export function AgentListPanel({
+  agents, agentMetas, agentStatuses, agentTools,
+  subagentCharacters, subagentTools,
+}: AgentListPanelProps) {
+  const [pos, setPos] = useState({ x: window.innerWidth - DEFAULT_WIDTH - PANEL_MARGIN, y: PANEL_MARGIN })
+  const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT })
   const dragging = useRef(false)
+  const resizing = useRef<'right' | 'bottom' | 'corner' | null>(null)
   const dragOffset = useRef({ x: 0, y: 0 })
-  const posLoaded = useRef(false)
+  const resizeStart = useRef({ mouseX: 0, mouseY: 0, width: 0, height: 0 })
 
-  // Request saved position on mount
+  // Load saved position and size on mount
   useEffect(() => {
     const handler = (data: unknown) => {
       const msg = data as Record<string, unknown>
       if (msg.type === 'agentListPanelPosLoaded' && msg.pos) {
-        const saved = msg.pos as { x: number; y: number }
-        setPos(saved)
-        posLoaded.current = true
+        setPos(msg.pos as { x: number; y: number })
+      }
+      if (msg.type === 'agentListPanelSizeLoaded' && msg.size) {
+        setSize(msg.size as { width: number; height: number })
       }
     }
     window.electronAPI.on('message', handler)
     vscode.postMessage({ type: 'getAgentListPanelPos' })
+    vscode.postMessage({ type: 'getAgentListPanelSize' })
     return () => window.electronAPI.removeListener('message', handler)
   }, [])
 
+  // Title bar drag
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     dragging.current = true
     dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }
     e.preventDefault()
   }, [pos])
 
+  // Resize edge detection
+  const handleResizeDown = useCallback((edge: 'right' | 'bottom' | 'corner', e: React.MouseEvent) => {
+    resizing.current = edge
+    resizeStart.current = { mouseX: e.clientX, mouseY: e.clientY, width: size.width, height: size.height }
+    e.preventDefault()
+    e.stopPropagation()
+  }, [size])
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!dragging.current) return
-      setPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
+      if (dragging.current) {
+        setPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
+      } else if (resizing.current) {
+        const dx = e.clientX - resizeStart.current.mouseX
+        const dy = e.clientY - resizeStart.current.mouseY
+        setSize((prev) => {
+          const w = resizing.current === 'bottom' ? prev.width : Math.max(MIN_WIDTH, resizeStart.current.width + dx)
+          const h = resizing.current === 'right' ? prev.height : Math.max(MIN_HEIGHT, resizeStart.current.height + dy)
+          return { width: w, height: h }
+        })
+      }
     }
     const handleMouseUp = () => {
       if (dragging.current) {
         dragging.current = false
-        // Persist position after drag ends
         setPos((current) => {
           vscode.postMessage({ type: 'setAgentListPanelPos', pos: current })
+          return current
+        })
+      }
+      if (resizing.current) {
+        resizing.current = null
+        setSize((current) => {
+          vscode.postMessage({ type: 'setAgentListPanelSize', size: current })
           return current
         })
       }
@@ -122,6 +153,20 @@ export function AgentListPanel({ agents, agentMetas, agentStatuses, agentTools }
     return map
   }, [agents, agentMetas])
 
+  // Build sub-agent lookup: parentAgentId → SubagentCharacter[]
+  const subsByParent = useMemo(() => {
+    const map = new Map<number, SubagentCharacter[]>()
+    for (const sub of subagentCharacters) {
+      let list = map.get(sub.parentAgentId)
+      if (!list) {
+        list = []
+        map.set(sub.parentAgentId, list)
+      }
+      list.push(sub)
+    }
+    return map
+  }, [subagentCharacters])
+
   if (agents.length === 0) return null
 
   return (
@@ -136,13 +181,15 @@ export function AgentListPanel({ agents, agentMetas, agentStatuses, agentTools }
         borderRadius: 0,
         padding: '4px 0',
         boxShadow: 'var(--pixel-shadow)',
-        minWidth: 180,
-        maxWidth: 260,
-        maxHeight: 'calc(100vh - 80px)',
-        overflowY: 'auto',
+        width: size.width,
+        height: size.height,
+        overflow: 'hidden',
         pointerEvents: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
+      {/* Title bar — draggable */}
       <div
         onMouseDown={handleMouseDown}
         style={{
@@ -154,81 +201,124 @@ export function AgentListPanel({ agents, agentMetas, agentStatuses, agentTools }
           letterSpacing: '1px',
           cursor: 'grab',
           userSelect: 'none',
+          flexShrink: 0,
         }}
       >
         Agents
       </div>
 
-      {[...grouped.entries()].map(([projectKey, agentList]) => (
-        <div key={projectKey}>
-          {/* Project header */}
-          <div style={{
-            fontSize: '18px',
-            color: 'var(--pixel-green)',
-            padding: '6px 10px 2px',
-            fontWeight: 'bold',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}>
-            {projectDisplayName(projectKey)}
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        {[...grouped.entries()].map(([projectKey, agentList]) => (
+          <div key={projectKey}>
+            {/* Project header */}
+            <div style={{
+              fontSize: '18px',
+              color: 'var(--pixel-green)',
+              padding: '6px 10px 2px',
+              fontWeight: 'bold',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {projectDisplayName(projectKey)}
+            </div>
+
+            {/* Agents in this project */}
+            {agentList.map(({ id, meta }) => {
+              const statusInfo = getStatusInfo(id, agentStatuses, agentTools)
+              const subs = subsByParent.get(id)
+
+              return (
+                <div key={id}>
+                  {/* Main agent row */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '2px 10px 2px 18px',
+                    fontSize: '18px',
+                  }}>
+                    <span
+                      className={statusInfo.isPermission ? 'pixel-agents-pulse' : undefined}
+                      style={{
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: statusInfo.color, flexShrink: 0,
+                      }}
+                    />
+                    <span style={{
+                      color: statusInfo.isPermission ? '#ff8888' : 'rgba(255, 255, 255, 0.8)',
+                      flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {meta.label}
+                    </span>
+                    <span style={{
+                      fontSize: '14px', color: statusInfo.color, flexShrink: 0,
+                      maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {statusInfo.text}
+                    </span>
+                  </div>
+
+                  {/* Sub-agents */}
+                  {subs && subs.map((sub) => {
+                    const subTools = subagentTools[id]?.[sub.parentToolId]
+                    const activeSub = subTools?.find((t) => !t.done)
+                    const subStatus = activeSub?.status || 'Running'
+                    return (
+                      <div key={sub.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '1px 10px 1px 30px', fontSize: '14px',
+                        color: 'rgba(255, 255, 255, 0.55)',
+                      }}>
+                        <span style={{ flexShrink: 0 }}>└</span>
+                        <span style={{
+                          width: 6, height: 6, borderRadius: '50%',
+                          background: 'var(--vscode-charts-blue, #3794ff)', flexShrink: 0,
+                        }} />
+                        <span style={{
+                          flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {sub.label}
+                        </span>
+                        <span style={{
+                          flexShrink: 0, maxWidth: 80,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {subStatus}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </div>
+        ))}
+      </div>
 
-          {/* Agents in this project */}
-          {agentList.map(({ id, meta }) => {
-            const statusInfo = getStatusInfo(id, agentStatuses, agentTools)
-
-            return (
-              <div
-                key={id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '2px 10px 2px 18px',
-                  fontSize: '18px',
-                }}
-              >
-                {/* Status dot */}
-                <span
-                  className={statusInfo.isPermission ? 'pixel-agents-pulse' : undefined}
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    background: statusInfo.color,
-                    flexShrink: 0,
-                  }}
-                />
-
-                {/* Label */}
-                <span style={{
-                  color: statusInfo.isPermission ? '#ff8888' : 'rgba(255, 255, 255, 0.8)',
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {meta.label}
-                </span>
-
-                {/* Status text */}
-                <span style={{
-                  fontSize: '14px',
-                  color: statusInfo.color,
-                  flexShrink: 0,
-                  maxWidth: 90,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {statusInfo.text}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      ))}
+      {/* Resize handles */}
+      <div
+        onMouseDown={(e) => handleResizeDown('right', e)}
+        style={{
+          position: 'absolute', top: 0, right: 0, width: RESIZE_HIT, height: '100%',
+          cursor: 'col-resize',
+        }}
+      />
+      <div
+        onMouseDown={(e) => handleResizeDown('bottom', e)}
+        style={{
+          position: 'absolute', bottom: 0, left: 0, width: '100%', height: RESIZE_HIT,
+          cursor: 'row-resize',
+        }}
+      />
+      <div
+        onMouseDown={(e) => handleResizeDown('corner', e)}
+        style={{
+          position: 'absolute', bottom: 0, right: 0, width: RESIZE_HIT * 2, height: RESIZE_HIT * 2,
+          cursor: 'nwse-resize',
+        }}
+      />
     </div>
   )
 }
