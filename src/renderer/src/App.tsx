@@ -8,6 +8,7 @@ import { DashboardView } from './components/DashboardView.js'
 import { EditorToolbar } from './office/editor/EditorToolbar.js'
 import { EditorState } from './office/editor/editorState.js'
 import { EditTool } from './office/types.js'
+import { getRemoteAgentId } from './remoteAgentId.js'
 import { isRotatable } from './office/layout/furnitureCatalog.js'
 import { vscode } from './vscodeApi.js'
 import { useExtensionMessages } from './hooks/useExtensionMessages.js'
@@ -210,18 +211,16 @@ function App() {
     // Build previous remote agent ID set
     const prevIds = new Set<number>()
     for (const peer of prevPeers) {
-      const hash = Array.from(peer.peerId).reduce((acc, c) => acc + c.charCodeAt(0), 0)
       for (const ra of peer.agents) {
-        prevIds.add(-(hash * 1000 + ra.id))
+        prevIds.add(getRemoteAgentId(peer.peerId, ra.id))
       }
     }
 
     // Build current remote agent ID set
     const currIds = new Set<number>()
     for (const peer of remotePeers) {
-      const hash = Array.from(peer.peerId).reduce((acc, c) => acc + c.charCodeAt(0), 0)
       for (const ra of peer.agents) {
-        currIds.add(-(hash * 1000 + ra.id))
+        currIds.add(getRemoteAgentId(peer.peerId, ra.id))
       }
     }
 

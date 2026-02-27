@@ -9,6 +9,7 @@ import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
 import { vscode } from '../vscodeApi.js'
 import { playDoneSound } from '../notificationSound.js'
+import { getRemoteAgentId } from '../remoteAgentId.js'
 
 export interface SubagentCharacter {
   id: number
@@ -208,6 +209,12 @@ export function useExtensionMessages(
           return next
         })
         setSubagentTools((prev) => {
+          if (!(id in prev)) return prev
+          const next = { ...prev }
+          delete next[id]
+          return next
+        })
+        setStatusHistory((prev) => {
           if (!(id in prev)) return prev
           const next = { ...prev }
           delete next[id]
@@ -452,7 +459,7 @@ export function useExtensionMessages(
           for (const agent of peer.agents) {
             const key = `${peer.peerId}:${agent.id}`
             const old = oldMap.get(key)
-            const remoteHistoryId = -(Math.abs(agent.id) + peer.peerId.charCodeAt(0) * 1000)
+            const remoteHistoryId = getRemoteAgentId(peer.peerId, agent.id)
             if (!old || old.status !== agent.status) {
               const statusText = agent.status === 'rate_limited' ? 'Rest' : agent.status === 'waiting' ? 'Waiting' : 'Active'
               pushHistory(remoteHistoryId, statusText)

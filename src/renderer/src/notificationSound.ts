@@ -8,6 +8,8 @@ import {
 } from './constants.js'
 
 let audioCtx: AudioContext | null = null
+let lastPlayTime = 0
+const THROTTLE_MS = 500
 
 function playNote(ctx: AudioContext, freq: number, startOffset: number): void {
   const t = ctx.currentTime + startOffset
@@ -29,6 +31,10 @@ function playNote(ctx: AudioContext, freq: number, startOffset: number): void {
 
 export async function playDoneSound(): Promise<void> {
   try {
+    const now = Date.now()
+    if (now - lastPlayTime < THROTTLE_MS) return
+    lastPlayTime = now
+
     if (!audioCtx) {
       audioCtx = new AudioContext()
     }

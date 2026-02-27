@@ -11,9 +11,9 @@
 - **WHEN** 使用者 hover 遠端 agent
 - **THEN** label 顯示 `[peerName] Agent #1` 格式，區分本機與遠端
 
-#### Scenario: 遠端 agent 不可操作
+#### Scenario: 遠端 agent 可查看歷史
 - **WHEN** 使用者點擊遠端 agent
-- **THEN** 不觸發 focusAgent（唯讀）
+- **THEN** 觸發 onAgentClick callback 開啟狀態歷史 popup（唯讀，不觸發 focusAgent）
 
 #### Scenario: 遠端 agent 離線
 - **WHEN** remote peer 被移除
@@ -41,6 +41,6 @@ DashboardView SHALL 以 peer name 為群組 header 顯示遠端 agents。
 - **WHEN** 有 remote peers 資料且 viewMode 為 dashboard
 - **THEN** 遠端 agents 按 peer name 分組顯示，與 list view 相同邏輯
 
-#### Scenario: 遠端 agent card 不可點擊
+#### Scenario: 遠端 agent card 可點擊查看歷史
 - **WHEN** 使用者點擊遠端 agent card
-- **THEN** 不觸發 onClickAgent
+- **THEN** 觸發 onAgentClick callback 開啟狀態歷史 popup

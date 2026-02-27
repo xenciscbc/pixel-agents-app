@@ -3,6 +3,7 @@ import type { OfficeState } from '../office/engine/officeState.js'
 import type { SubagentCharacter, AgentMeta, RemotePeer } from '../hooks/useExtensionMessages.js'
 import type { ToolActivity } from '../office/types.js'
 import { TILE_SIZE, CharacterState } from '../office/types.js'
+import { getRemoteAgentId } from '../remoteAgentId.js'
 
 interface AgentLabelsProps {
   officeState: OfficeState
@@ -96,9 +97,7 @@ export function AgentLabels({
   const remoteAgentMap = new Map<number, { peerName: string; status: string; currentTool?: string }>()
   for (const peer of remotePeers) {
     for (const ra of peer.agents) {
-      // Remote agents use negative IDs based on peerId hash
-      const hash = Array.from(peer.peerId).reduce((acc, c) => acc + c.charCodeAt(0), 0)
-      const remoteId = -(hash * 1000 + ra.id)
+      const remoteId = getRemoteAgentId(peer.peerId, ra.id)
       remoteAgentMap.set(remoteId, { peerName: peer.name, status: ra.status, currentTool: ra.currentTool })
     }
   }

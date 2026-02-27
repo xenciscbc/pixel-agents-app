@@ -34,22 +34,48 @@ Compared to the original VS Code extension, this standalone version adds:
 - **Sound notifications** — granular per-event sound control (see [Sound Notifications](#sound-notifications))
 - **Sub-agent visualization** — Task tool sub-agents spawn as separate characters
 - **Persistent layouts** — your office design is saved across sessions
-- **Three view modes** — Office (pixel art), Dashboard (card-based), List (compact panel)
+- **Two view modes + agent panel** — Office (pixel art), Dashboard (card-based), plus a draggable agent list panel overlay
 - **LAN peer sharing** — see agents from other machines on the same network
 - **Status history** — click any agent to see recent activity history
 - **Window controls** — always-on-top, system tray, minimize to tray
+- **Minimized mode** — start hidden in system tray with `-min` flag
+
+## System Tray
+
+The app always creates a system tray icon. Right-click the tray icon for:
+- **Show Window** — bring the window to front
+- **Exit** — quit the application
+
+### Minimized Mode (`-min`)
+
+Launch with the `-min` flag to start the app hidden in the system tray without showing the window:
+
+```bash
+# Development
+pnpm run dev -- -min
+
+# Packaged app
+"Pixel Agents.exe" -min
+```
+
+In this mode:
+- The window is not created on startup — the app runs silently in the tray
+- Click "Show Window" in the tray menu to open the window
+- Closing the window returns to tray instead of quitting
+- Use "Exit" from the tray menu to fully quit
 
 ## View Modes
 
-Switch between three view modes using the bottom toolbar:
+Switch between view modes using the bottom toolbar:
 
 | Mode | Description |
 |---|---|
 | **Office** | Animated pixel art office with characters walking and typing. Hover over characters to see name and status. |
 | **Dashboard** | Card-based grid/list view. Each card shows agent label, status, current tool, sub-agents, and last activity time. Supports grid and list layouts. |
-| **List** | Compact draggable/resizable side panel showing all agents grouped by project. |
 
-In all three views, **click an agent** to open a popup showing the most recent 10 status events (consecutive-deduplicated).
+The **List** panel is a compact draggable/resizable side panel that overlays the Office view, showing all agents grouped by project. Toggle it from the bottom toolbar while in Office mode.
+
+In all views, **click an agent** to open a popup showing the most recent 10 status events (consecutive-deduplicated).
 
 ## Agent Status Detection
 

@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import type { AgentMeta, SubagentCharacter, RemotePeer } from '../hooks/useExtensionMessages.js'
 import type { ToolActivity } from '../office/types.js'
 import { vscode } from '../vscodeApi.js'
+import { getRemoteAgentId } from '../remoteAgentId.js'
 
 interface AgentListPanelProps {
   agents: number[]
@@ -325,7 +326,7 @@ export function AgentListPanel({
                 : ra.status === 'waiting' ? 'var(--vscode-charts-yellow, #cca700)'
                 : 'var(--vscode-charts-blue, #3794ff)'
               const statusText = ra.currentTool || (ra.status === 'rate_limited' ? 'Rest' : ra.status === 'waiting' ? 'Waiting' : 'Active')
-              const remoteHistoryId = -(Math.abs(ra.id) + peer.peerId.charCodeAt(0) * 1000)
+              const remoteHistoryId = getRemoteAgentId(peer.peerId, ra.id)
               return (
                 <div key={ra.id}>
                   <div
