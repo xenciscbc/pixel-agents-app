@@ -30,3 +30,26 @@ export interface PersistedAgent {
 	jsonlFile: string;
 	projectDir: string;
 }
+
+export interface RemoteAgent {
+	id: number;
+	label: string;
+	projectDir: string;
+	status: 'active' | 'waiting' | 'rate_limited';
+	currentTool?: string;
+	subagents: { label: string; currentTool?: string }[];
+}
+
+export interface RemotePeer {
+	peerId: string;
+	name: string;
+	agents: RemoteAgent[];
+}
+
+export interface HeartbeatPayload {
+	v: number;
+	type: 'heartbeat';
+	peerId: string;
+	name: string;
+	agents: RemoteAgent[];
+}

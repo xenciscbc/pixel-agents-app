@@ -8,7 +8,7 @@ import { setFloorSprites } from '../office/floorTiles.js'
 import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
 import { vscode } from '../vscodeApi.js'
-import { playDoneSound, setSoundEnabled } from '../notificationSound.js'
+import { playDoneSound } from '../notificationSound.js'
 
 export interface SubagentCharacter {
   id: number
@@ -42,6 +42,29 @@ export interface AgentMeta {
   lastActivity?: number
 }
 
+export interface RemoteAgent {
+  id: number
+  label: string
+  projectDir: string
+  status: 'active' | 'waiting' | 'rate_limited'
+  currentTool?: string
+  subagents: { label: string; currentTool?: string }[]
+}
+
+export interface RemotePeer {
+  peerId: string
+  name: string
+  agents: RemoteAgent[]
+}
+
+export interface SoundSettings {
+  enabled: boolean
+  waiting: boolean
+  rest: boolean
+  needsApproval: boolean
+  idle: boolean
+}
+
 export interface ExtensionMessageState {
   agents: number[]
   agentMetas: Record<number, AgentMeta>
@@ -51,6 +74,14 @@ export interface ExtensionMessageState {
   subagentTools: Record<number, Record<string, ToolActivity[]>>
   subagentCharacters: SubagentCharacter[]
   fontScale: number
+  alwaysOnTop: boolean
+  peerName: string
+  broadcastEnabled: boolean
+  udpPort: number
+  heartbeatInterval: number
+  remotePeers: RemotePeer[]
+  soundSettings: SoundSettings
+  statusHistory: Record<number, string[]>
   layoutReady: boolean
   loadedAssets?: { catalog: FurnitureAsset[]; sprites: Record<string, string[][]> }
 }
@@ -77,11 +108,22 @@ export function useExtensionMessages(
   const [subagentTools, setSubagentTools] = useState<Record<number, Record<string, ToolActivity[]>>>({})
   const [subagentCharacters, setSubagentCharacters] = useState<SubagentCharacter[]>([])
   const [fontScale, setFontScale] = useState(1.0)
+  const [alwaysOnTop, setAlwaysOnTop] = useState(false)
+  const [peerName, setPeerName] = useState('')
+  const [broadcastEnabled, setBroadcastEnabled] = useState(true)
+  const [udpPort, setUdpPort] = useState(47800)
+  const [heartbeatInterval, setHeartbeatInterval] = useState(30)
+  const [remotePeers, setRemotePeers] = useState<RemotePeer[]>([])
+  const [soundSettings, setSoundSettings] = useState<SoundSettings>({ enabled: true, waiting: true, rest: true, needsApproval: true, idle: false })
+  const [statusHistory, setStatusHistory] = useState<Record<number, string[]>>({})
   const [layoutReady, setLayoutReady] = useState(false)
   const [loadedAssets, setLoadedAssets] = useState<{ catalog: FurnitureAsset[]; sprites: Record<string, string[][]> } | undefined>()
 
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
+  const soundSettingsRef = useRef(soundSettings)
+  soundSettingsRef.current = soundSettings
+  const prevRemotePeersRef = useRef<RemotePeer[]>([])
 
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
@@ -92,6 +134,15 @@ export function useExtensionMessages(
         const meta = prev[id]
         if (!meta) return prev
         return { ...prev, [id]: { ...meta, lastActivity: Date.now() } }
+      })
+    }
+
+    const pushHistory = (id: number, text: string) => {
+      setStatusHistory((prev) => {
+        const list = prev[id] || []
+        if (list.length > 0 && list[0] === text) return prev
+        const next = [text, ...list].slice(0, 10)
+        return { ...prev, [id]: next }
       })
     }
 
@@ -198,6 +249,7 @@ export function useExtensionMessages(
         os.setAgentTool(id, toolName)
         os.setAgentActive(id, true)
         os.clearPermissionBubble(id)
+        pushHistory(id, status)
         // Create sub-agent character for Task tool subtasks
         if (status.startsWith('Subtask:')) {
           const label = status.slice('Subtask:'.length).trim()
@@ -238,6 +290,8 @@ export function useExtensionMessages(
         setSubagentCharacters((prev) => prev.filter((s) => s.parentAgentId !== id))
         os.setAgentTool(id, null)
         os.clearPermissionBubble(id)
+        const ss = soundSettingsRef.current
+        if (ss.enabled && ss.idle) playDoneSound()
       } else if (msg.type === 'agentSelected') {
         const id = msg.id as number
         setSelectedAgent(id)
@@ -255,9 +309,18 @@ export function useExtensionMessages(
           return { ...prev, [id]: status }
         })
         os.setAgentActive(id, status === 'active')
-        if (status === 'waiting' || status === 'rate_limited') {
+        if (status === 'waiting') {
           os.showWaitingBubble(id)
-          playDoneSound()
+          pushHistory(id, 'Waiting')
+          const ss = soundSettingsRef.current
+          if (ss.enabled && ss.waiting) playDoneSound()
+        } else if (status === 'rate_limited') {
+          os.showWaitingBubble(id)
+          pushHistory(id, 'Rest')
+          const ss = soundSettingsRef.current
+          if (ss.enabled && ss.rest) playDoneSound()
+        } else if (status === 'active') {
+          pushHistory(id, 'Active')
         }
       } else if (msg.type === 'agentToolPermission') {
         const id = msg.id as number
@@ -270,6 +333,9 @@ export function useExtensionMessages(
           }
         })
         os.showPermissionBubble(id)
+        pushHistory(id, 'Needs approval')
+        const ss = soundSettingsRef.current
+        if (ss.enabled && ss.needsApproval) playDoneSound()
       } else if (msg.type === 'subagentToolPermission') {
         const id = msg.id as number
         const parentToolId = msg.parentToolId as string
@@ -359,11 +425,45 @@ export function useExtensionMessages(
         const sprites = msg.sprites as string[][][]
         console.log(`[Webview] Received ${sprites.length} wall tile sprites`)
         setWallSprites(sprites)
-      } else if (msg.type === 'settingsLoaded') {
-        const soundOn = msg.soundEnabled as boolean
-        setSoundEnabled(soundOn)
+      } else if (msg.type === 'soundSettingsLoaded') {
+        setSoundSettings(msg.soundSettings as SoundSettings)
       } else if (msg.type === 'fontScaleLoaded') {
         setFontScale(msg.fontScale as number)
+      } else if (msg.type === 'alwaysOnTopLoaded') {
+        setAlwaysOnTop(msg.alwaysOnTop as boolean)
+      } else if (msg.type === 'peerNameLoaded') {
+        setPeerName(msg.peerName as string)
+      } else if (msg.type === 'broadcastEnabledLoaded') {
+        setBroadcastEnabled(msg.broadcastEnabled as boolean)
+      } else if (msg.type === 'udpPortLoaded') {
+        setUdpPort(msg.udpPort as number)
+      } else if (msg.type === 'heartbeatIntervalLoaded') {
+        setHeartbeatInterval(msg.heartbeatInterval as number)
+      } else if (msg.type === 'remotePeersUpdated') {
+        const newPeers = msg.peers as RemotePeer[]
+        // Diff remote agents to track status history
+        const oldMap = new Map<string, RemoteAgent>()
+        for (const peer of prevRemotePeersRef.current) {
+          for (const agent of peer.agents) {
+            oldMap.set(`${peer.peerId}:${agent.id}`, agent)
+          }
+        }
+        for (const peer of newPeers) {
+          for (const agent of peer.agents) {
+            const key = `${peer.peerId}:${agent.id}`
+            const old = oldMap.get(key)
+            const remoteHistoryId = -(Math.abs(agent.id) + peer.peerId.charCodeAt(0) * 1000)
+            if (!old || old.status !== agent.status) {
+              const statusText = agent.status === 'rate_limited' ? 'Rest' : agent.status === 'waiting' ? 'Waiting' : 'Active'
+              pushHistory(remoteHistoryId, statusText)
+            }
+            if (!old || old.currentTool !== agent.currentTool) {
+              if (agent.currentTool) pushHistory(remoteHistoryId, agent.currentTool)
+            }
+          }
+        }
+        prevRemotePeersRef.current = newPeers
+        setRemotePeers(newPeers)
       } else if (msg.type === 'furnitureAssetsLoaded') {
         try {
           const catalog = msg.catalog as FurnitureAsset[]
@@ -382,5 +482,5 @@ export function useExtensionMessages(
     return () => window.electronAPI.removeListener('message', handler)
   }, [getOfficeState])
 
-  return { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, fontScale, layoutReady, loadedAssets }
+  return { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, fontScale, alwaysOnTop, peerName, broadcastEnabled, udpPort, heartbeatInterval, remotePeers, soundSettings, statusHistory, layoutReady, loadedAssets }
 }

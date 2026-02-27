@@ -16,6 +16,7 @@ import { useEditorActions } from './hooks/useEditorActions.js'
 import { useEditorKeyboard } from './hooks/useEditorKeyboard.js'
 import { ZoomControls } from './components/ZoomControls.js'
 import { BottomToolbar } from './components/BottomToolbar.js'
+import { StatusHistoryPopup } from './components/StatusHistoryPopup.js'
 import { DebugView } from './components/DebugView.js'
 
 type ViewMode = 'office' | 'dashboard'
@@ -127,7 +128,7 @@ function App() {
 
   const isEditDirty = useCallback(() => editor.isEditMode && editor.isDirty, [editor.isEditMode, editor.isDirty])
 
-  const { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, fontScale, layoutReady, loadedAssets } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty)
+  const { agents, agentMetas, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, fontScale, alwaysOnTop, peerName, broadcastEnabled, udpPort, heartbeatInterval, remotePeers, soundSettings, statusHistory, layoutReady, loadedAssets } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('office')
@@ -162,9 +163,84 @@ function App() {
     vscode.postMessage({ type: 'setFontScale', scale })
   }, [])
 
+  const handleSetAlwaysOnTop = useCallback((value: boolean) => {
+    vscode.postMessage({ type: 'setAlwaysOnTop', value })
+  }, [])
+
+  const handleSetPeerName = useCallback((name: string) => {
+    vscode.postMessage({ type: 'setPeerName', name })
+  }, [])
+
+  const handleSetBroadcastEnabled = useCallback((enabled: boolean) => {
+    vscode.postMessage({ type: 'setBroadcastEnabled', enabled })
+  }, [])
+
+  const handleSetUdpPort = useCallback((port: number) => {
+    vscode.postMessage({ type: 'setUdpPort', port })
+  }, [])
+
+  const handleSetHeartbeatInterval = useCallback((seconds: number) => {
+    vscode.postMessage({ type: 'setHeartbeatInterval', seconds })
+  }, [])
+
+  const handleSetSoundSettings = useCallback((settings: import('./hooks/useExtensionMessages.js').SoundSettings) => {
+    vscode.postMessage({ type: 'setSoundSettings', settings })
+  }, [])
+
+  const [historyPopup, setHistoryPopup] = useState<{ agentId: number; label: string; position: { x: number; y: number } } | null>(null)
+
+  const handleAgentClick = useCallback((agentId: number, label: string, position: { x: number; y: number }) => {
+    setHistoryPopup({ agentId, label, position })
+  }, [])
+
+  const handleClosePopup = useCallback(() => {
+    setHistoryPopup(null)
+  }, [])
+
   const handleSelectAgent = useCallback((id: number) => {
     vscode.postMessage({ type: 'focusAgent', id })
   }, [])
+
+  // Sync remote peers to officeState for Office View
+  const prevRemotePeersRef = useRef<typeof remotePeers>([])
+  useEffect(() => {
+    const os = getOfficeState()
+    const prevPeers = prevRemotePeersRef.current
+
+    // Build previous remote agent ID set
+    const prevIds = new Set<number>()
+    for (const peer of prevPeers) {
+      const hash = Array.from(peer.peerId).reduce((acc, c) => acc + c.charCodeAt(0), 0)
+      for (const ra of peer.agents) {
+        prevIds.add(-(hash * 1000 + ra.id))
+      }
+    }
+
+    // Build current remote agent ID set
+    const currIds = new Set<number>()
+    for (const peer of remotePeers) {
+      const hash = Array.from(peer.peerId).reduce((acc, c) => acc + c.charCodeAt(0), 0)
+      for (const ra of peer.agents) {
+        currIds.add(-(hash * 1000 + ra.id))
+      }
+    }
+
+    // Add new remote agents
+    for (const id of currIds) {
+      if (!prevIds.has(id)) {
+        os.addAgent(id)
+      }
+    }
+
+    // Remove gone remote agents
+    for (const id of prevIds) {
+      if (!currIds.has(id)) {
+        os.removeAgent(id)
+      }
+    }
+
+    prevRemotePeersRef.current = remotePeers
+  }, [remotePeers])
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -334,6 +410,8 @@ function App() {
             panRef={editor.panRef}
             subagentCharacters={subagentCharacters}
             fontScale={fontScale}
+            remotePeers={remotePeers}
+            onAgentClick={handleAgentClick}
           />
 
           <AgentListPanel
@@ -344,6 +422,8 @@ function App() {
             subagentCharacters={subagentCharacters}
             subagentTools={subagentTools}
             fontScale={fontScale}
+            remotePeers={remotePeers}
+            onAgentClick={handleAgentClick}
           />
         </>
       )}
@@ -357,8 +437,9 @@ function App() {
           subagentCharacters={subagentCharacters}
           subagentTools={subagentTools}
           dashboardLayout={dashboardLayout}
-          onClickAgent={handleSelectAgent}
+          onAgentClick={handleAgentClick}
           fontScale={fontScale}
+          remotePeers={remotePeers}
         />
       )}
 
@@ -373,7 +454,30 @@ function App() {
         onSetDashboardLayout={handleSetDashboardLayout}
         fontScale={fontScale}
         onFontScaleChange={handleSetFontScale}
+        alwaysOnTop={alwaysOnTop}
+        onAlwaysOnTopChange={handleSetAlwaysOnTop}
+        peerName={peerName}
+        onPeerNameChange={handleSetPeerName}
+        broadcastEnabled={broadcastEnabled}
+        onBroadcastEnabledChange={handleSetBroadcastEnabled}
+        udpPort={udpPort}
+        onUdpPortChange={handleSetUdpPort}
+        heartbeatInterval={heartbeatInterval}
+        onHeartbeatIntervalChange={handleSetHeartbeatInterval}
+        soundSettings={soundSettings}
+        onSoundSettingsChange={handleSetSoundSettings}
       />
+
+      {historyPopup && (
+        <StatusHistoryPopup
+          agentId={historyPopup.agentId}
+          agentLabel={historyPopup.label}
+          history={statusHistory[historyPopup.agentId] || []}
+          position={historyPopup.position}
+          fontScale={fontScale}
+          onClose={handleClosePopup}
+        />
+      )}
 
       {isDebugMode && (
         <DebugView

@@ -39,11 +39,27 @@ TBD - created by archiving change 'pixel-agents-standalone'. Update Purpose afte
 
 ---
 ### Requirement: Sound notification
-系統應保留 agent 等待狀態的通知音效系統。音效啟用／停用偏好設定應持久化儲存於應用程式設定中。
+系統應根據 Sound Settings 中的細項設定，在對應狀態事件發生時播放通知音效。僅限本機 agent 事件觸發。
 
-#### Scenario: Sound on waiting
-- **WHEN** agent 進入等待狀態
-- **THEN** 若設定中音效已啟用，則播放通知音效
+#### Scenario: Waiting 音效
+- **WHEN** 本機 agent 進入 waiting 狀態且 soundSettings.enabled 為 true 且 soundSettings.waiting 為 true
+- **THEN** 播放通知音效
+
+#### Scenario: Rest 音效
+- **WHEN** 本機 agent 進入 rate_limited 狀態且 soundSettings.enabled 為 true 且 soundSettings.rest 為 true
+- **THEN** 播放通知音效
+
+#### Scenario: Needs Approval 音效
+- **WHEN** 本機 agent 收到 agentToolPermission 且 soundSettings.enabled 為 true 且 soundSettings.needsApproval 為 true
+- **THEN** 播放通知音效
+
+#### Scenario: Idle 音效
+- **WHEN** 本機 agent 變為 idle（agentToolsClear 且無 active tool）且 soundSettings.enabled 為 true 且 soundSettings.idle 為 true
+- **THEN** 播放通知音效
+
+#### Scenario: 總開關關閉
+- **WHEN** soundSettings.enabled 為 false
+- **THEN** 不播放任何音效，無論各事件 checkbox 狀態
 
 ---
 ### Requirement: Import/Export layout via native dialogs
@@ -92,3 +108,37 @@ AgentLabels tooltip SHALL 根據 `fontScale` 設定縮放 fontSize。
 #### Scenario: fontScale 套用至 tooltip
 - **WHEN** fontScale 變更
 - **THEN** tooltip 中的 agent label 和 status text fontSize 等比例縮放
+
+---
+
+### Requirement: Renderer 新增 remotePeers state
+useExtensionMessages hook SHALL 新增 `remotePeers` state 管理遠端 peer 資料。
+
+#### Scenario: 初始狀態
+- **WHEN** app 啟動
+- **THEN** remotePeers 為空陣列
+
+#### Scenario: 接收 remotePeersUpdated
+- **WHEN** 收到 `remotePeersUpdated` IPC 訊息
+- **THEN** 以 peers snapshot 替換整個 remotePeers 陣列
+
+#### Scenario: Peer 移除
+- **WHEN** 收到不含某 peerId 的 snapshot
+- **THEN** 該 peer 從 remotePeers 中消失，UI 即時更新
+
+---
+
+### Requirement: statusHistory state
+useExtensionMessages hook SHALL 新增 `statusHistory: Record<number, string[]>` state，追蹤每個 agent 的狀態歷史。
+
+#### Scenario: 初始狀態
+- **WHEN** app 啟動
+- **THEN** statusHistory 為空 object `{}`
+
+#### Scenario: 歷史更新
+- **WHEN** 狀態事件觸發
+- **THEN** 對應 agent 的歷史 array 更新（最新在 index 0，連續去重，上限 10 筆）
+
+#### Scenario: hook 回傳
+- **WHEN** 消費者存取 useExtensionMessages 回傳值
+- **THEN** 可取得 `statusHistory` 欄位

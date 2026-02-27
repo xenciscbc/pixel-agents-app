@@ -7,16 +7,7 @@ import {
   NOTIFICATION_VOLUME,
 } from './constants.js'
 
-let soundEnabled = true
 let audioCtx: AudioContext | null = null
-
-export function setSoundEnabled(enabled: boolean): void {
-  soundEnabled = enabled
-}
-
-export function isSoundEnabled(): boolean {
-  return soundEnabled
-}
 
 function playNote(ctx: AudioContext, freq: number, startOffset: number): void {
   const t = ctx.currentTime + startOffset
@@ -37,7 +28,6 @@ function playNote(ctx: AudioContext, freq: number, startOffset: number): void {
 }
 
 export async function playDoneSound(): Promise<void> {
-  if (!soundEnabled) return
   try {
     if (!audioCtx) {
       audioCtx = new AudioContext()

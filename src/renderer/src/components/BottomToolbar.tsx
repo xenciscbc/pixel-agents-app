@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SettingsModal } from './SettingsModal.js'
+import type { SoundSettings } from '../hooks/useExtensionMessages.js'
 
 type ViewMode = 'office' | 'dashboard'
 type DashboardLayout = 'grid' | 'list'
@@ -15,6 +16,18 @@ interface BottomToolbarProps {
   onSetDashboardLayout: (layout: DashboardLayout) => void
   fontScale: number
   onFontScaleChange: (scale: number) => void
+  alwaysOnTop: boolean
+  onAlwaysOnTopChange: (value: boolean) => void
+  peerName: string
+  onPeerNameChange: (name: string) => void
+  broadcastEnabled: boolean
+  onBroadcastEnabledChange: (value: boolean) => void
+  udpPort: number
+  onUdpPortChange: (port: number) => void
+  heartbeatInterval: number
+  onHeartbeatIntervalChange: (seconds: number) => void
+  soundSettings: SoundSettings
+  onSoundSettingsChange: (settings: SoundSettings) => void
 }
 
 const panelStyle: React.CSSProperties = {
@@ -103,6 +116,18 @@ export function BottomToolbar({
   onSetDashboardLayout,
   fontScale,
   onFontScaleChange,
+  alwaysOnTop,
+  onAlwaysOnTopChange,
+  peerName,
+  onPeerNameChange,
+  broadcastEnabled,
+  onBroadcastEnabledChange,
+  udpPort,
+  onUdpPortChange,
+  heartbeatInterval,
+  onHeartbeatIntervalChange,
+  soundSettings,
+  onSoundSettingsChange,
 }: BottomToolbarProps) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -179,6 +204,18 @@ export function BottomToolbar({
           onToggleDebugMode={onToggleDebugMode}
           fontScale={fontScale}
           onFontScaleChange={onFontScaleChange}
+          alwaysOnTop={alwaysOnTop}
+          onAlwaysOnTopChange={onAlwaysOnTopChange}
+          peerName={peerName}
+          onPeerNameChange={onPeerNameChange}
+          broadcastEnabled={broadcastEnabled}
+          onBroadcastEnabledChange={onBroadcastEnabledChange}
+          udpPort={udpPort}
+          onUdpPortChange={onUdpPortChange}
+          heartbeatInterval={heartbeatInterval}
+          onHeartbeatIntervalChange={onHeartbeatIntervalChange}
+          soundSettings={soundSettings}
+          onSoundSettingsChange={onSoundSettingsChange}
         />
       </div>
     </div>

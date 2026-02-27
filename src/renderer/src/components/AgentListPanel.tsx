@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
-import type { AgentMeta, SubagentCharacter } from '../hooks/useExtensionMessages.js'
+import type { AgentMeta, SubagentCharacter, RemotePeer } from '../hooks/useExtensionMessages.js'
 import type { ToolActivity } from '../office/types.js'
 import { vscode } from '../vscodeApi.js'
 
@@ -11,6 +11,8 @@ interface AgentListPanelProps {
   subagentCharacters: SubagentCharacter[]
   subagentTools: Record<number, Record<string, ToolActivity[]>>
   fontScale: number
+  remotePeers: RemotePeer[]
+  onAgentClick?: (agentId: number, label: string, position: { x: number; y: number }) => void
 }
 
 /** Convert encoded dir name back to readable project name. */
@@ -61,7 +63,7 @@ const RESIZE_HIT = 8
 
 export function AgentListPanel({
   agents, agentMetas, agentStatuses, agentTools,
-  subagentCharacters, subagentTools, fontScale,
+  subagentCharacters, subagentTools, fontScale, remotePeers, onAgentClick,
 }: AgentListPanelProps) {
   const fs = (base: number) => `${Math.round(base * fontScale)}px`
   const [pos, setPos] = useState({ x: window.innerWidth - DEFAULT_WIDTH - PANEL_MARGIN, y: PANEL_MARGIN })
@@ -172,7 +174,7 @@ export function AgentListPanel({
     return map
   }, [subagentCharacters])
 
-  if (agents.length === 0) return null
+  if (agents.length === 0 && remotePeers.length === 0) return null
 
   return (
     <div
@@ -236,12 +238,15 @@ export function AgentListPanel({
               return (
                 <div key={id}>
                   {/* Main agent row */}
-                  <div style={{
+                  <div
+                    onClick={(e) => onAgentClick?.(id, meta.label, { x: e.clientX, y: e.clientY })}
+                    style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
                     padding: '2px 10px 2px 18px',
                     fontSize: fs(18),
+                    cursor: onAgentClick ? 'pointer' : undefined,
                   }}>
                     <span
                       className={statusInfo.isPermission ? 'pixel-agents-pulse' : undefined}
@@ -294,6 +299,85 @@ export function AgentListPanel({
                       </div>
                     )
                   })}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+
+        {/* Remote peer groups */}
+        {remotePeers.map((peer) => (
+          <div key={peer.peerId}>
+            <div style={{
+              fontSize: fs(18),
+              color: 'rgba(130, 180, 255, 0.8)',
+              padding: '6px 10px 2px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              borderTop: '1px solid var(--pixel-border)',
+              marginTop: 4,
+            }}>
+              {peer.name}
+            </div>
+            {peer.agents.map((ra) => {
+              const statusColor = ra.status === 'rate_limited' ? '#e55'
+                : ra.status === 'waiting' ? 'var(--vscode-charts-yellow, #cca700)'
+                : 'var(--vscode-charts-blue, #3794ff)'
+              const statusText = ra.currentTool || (ra.status === 'rate_limited' ? 'Rest' : ra.status === 'waiting' ? 'Waiting' : 'Active')
+              const remoteHistoryId = -(Math.abs(ra.id) + peer.peerId.charCodeAt(0) * 1000)
+              return (
+                <div key={ra.id}>
+                  <div
+                    onClick={(e) => onAgentClick?.(remoteHistoryId, ra.label, { x: e.clientX, y: e.clientY })}
+                    style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '2px 10px 2px 18px', fontSize: fs(18),
+                    cursor: onAgentClick ? 'pointer' : undefined,
+                  }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: statusColor, flexShrink: 0,
+                    }} />
+                    <span style={{
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {ra.label}
+                    </span>
+                    <span style={{
+                      fontSize: fs(14), color: statusColor, flexShrink: 0,
+                      maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {statusText}
+                    </span>
+                  </div>
+                  {ra.subagents.map((sub, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '1px 10px 1px 30px', fontSize: fs(14),
+                      color: 'rgba(255, 255, 255, 0.55)',
+                    }}>
+                      <span style={{ flexShrink: 0 }}>└</span>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: 'var(--vscode-charts-blue, #3794ff)', flexShrink: 0,
+                      }} />
+                      <span style={{
+                        flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {sub.label}
+                      </span>
+                      {sub.currentTool && (
+                        <span style={{
+                          flexShrink: 0, maxWidth: 80,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {sub.currentTool}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )
             })}

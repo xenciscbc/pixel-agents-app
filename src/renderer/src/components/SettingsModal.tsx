@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { vscode } from '../vscodeApi.js'
-import { isSoundEnabled, setSoundEnabled } from '../notificationSound.js'
+import type { SoundSettings } from '../hooks/useExtensionMessages.js'
 /** Mirrors WatchDir from src/main/settingsStore.ts */
 interface WatchDir {
   type: 'claude-root' | 'project'
@@ -14,6 +14,18 @@ interface SettingsModalProps {
   onToggleDebugMode: () => void
   fontScale: number
   onFontScaleChange: (scale: number) => void
+  alwaysOnTop: boolean
+  onAlwaysOnTopChange: (value: boolean) => void
+  peerName: string
+  onPeerNameChange: (name: string) => void
+  broadcastEnabled: boolean
+  onBroadcastEnabledChange: (value: boolean) => void
+  udpPort: number
+  onUdpPortChange: (port: number) => void
+  heartbeatInterval: number
+  onHeartbeatIntervalChange: (seconds: number) => void
+  soundSettings: SoundSettings
+  onSoundSettingsChange: (settings: SoundSettings) => void
 }
 
 const menuItemBase: React.CSSProperties = {
@@ -57,9 +69,8 @@ const smallBtnStyle: React.CSSProperties = {
   padding: '0 4px',
 }
 
-export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode, fontScale, onFontScaleChange }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode, fontScale, onFontScaleChange, alwaysOnTop, onAlwaysOnTopChange, peerName, onPeerNameChange, broadcastEnabled, onBroadcastEnabledChange, udpPort, onUdpPortChange, heartbeatInterval, onHeartbeatIntervalChange, soundSettings, onSoundSettingsChange }: SettingsModalProps) {
   const [hovered, setHovered] = useState<string | null>(null)
-  const [soundLocal, setSoundLocal] = useState(isSoundEnabled)
   const [watchDirs, setWatchDirs] = useState<WatchDir[]>([])
   const [threshold, setThreshold] = useState(30)
   const [scanInterval, setScanIntervalLocal] = useState(30)
@@ -314,6 +325,139 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode,
           </div>
         </div>
 
+        {/* Window Section */}
+        <div style={sectionLabelStyle}>Window</div>
+        <button
+          onClick={() => onAlwaysOnTopChange(!alwaysOnTop)}
+          onMouseEnter={() => setHovered('aot')}
+          onMouseLeave={() => setHovered(null)}
+          style={{
+            ...menuItemBase,
+            background: hovered === 'aot' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+          }}
+        >
+          <span>Always on Top</span>
+          <span
+            style={{
+              width: 14,
+              height: 14,
+              border: '2px solid rgba(255, 255, 255, 0.5)',
+              borderRadius: 0,
+              background: alwaysOnTop ? 'rgba(90, 140, 255, 0.8)' : 'transparent',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              lineHeight: 1,
+              color: '#fff',
+            }}
+          >
+            {alwaysOnTop ? 'X' : ''}
+          </span>
+        </button>
+
+        {/* Network Section */}
+        <div style={sectionLabelStyle}>Network</div>
+        <div style={{ ...dirItemStyle, padding: '4px 10px' }}>
+          <span style={{ fontSize: '22px' }}>Peer Name</span>
+          <input
+            type="text"
+            value={peerName}
+            onChange={(e) => onPeerNameChange(e.target.value)}
+            style={{
+              width: 120,
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--pixel-border)',
+              borderRadius: 0,
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontSize: '20px',
+              padding: '2px 4px',
+              textAlign: 'right',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
+        <button
+          onClick={() => onBroadcastEnabledChange(!broadcastEnabled)}
+          onMouseEnter={() => setHovered('broadcast')}
+          onMouseLeave={() => setHovered(null)}
+          style={{
+            ...menuItemBase,
+            background: hovered === 'broadcast' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+          }}
+        >
+          <span>Broadcast</span>
+          <span
+            style={{
+              width: 14,
+              height: 14,
+              border: '2px solid rgba(255, 255, 255, 0.5)',
+              borderRadius: 0,
+              background: broadcastEnabled ? 'rgba(90, 140, 255, 0.8)' : 'transparent',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              lineHeight: 1,
+              color: '#fff',
+            }}
+          >
+            {broadcastEnabled ? 'X' : ''}
+          </span>
+        </button>
+        <div style={{ ...dirItemStyle, padding: '4px 10px' }}>
+          <span style={{ fontSize: '22px' }}>UDP Port</span>
+          <input
+            type="number"
+            min={1024}
+            max={65535}
+            value={udpPort}
+            onChange={(e) => {
+              const num = parseInt(e.target.value, 10)
+              if (!isNaN(num) && num >= 1024 && num <= 65535) onUdpPortChange(num)
+            }}
+            style={{
+              width: 70,
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--pixel-border)',
+              borderRadius: 0,
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontSize: '20px',
+              padding: '2px 4px',
+              textAlign: 'center',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
+        <div style={{ ...dirItemStyle, padding: '4px 10px' }}>
+          <span style={{ fontSize: '22px' }}>Heartbeat Interval</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input
+              type="number"
+              min={1}
+              value={heartbeatInterval}
+              onChange={(e) => {
+                const num = parseInt(e.target.value, 10)
+                if (!isNaN(num) && num >= 1) onHeartbeatIntervalChange(num)
+              }}
+              style={{
+                width: 50,
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid var(--pixel-border)',
+                borderRadius: 0,
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontSize: '20px',
+                padding: '2px 4px',
+                textAlign: 'center',
+                fontFamily: 'inherit',
+              }}
+            />
+            <span style={{ fontSize: '20px', color: 'rgba(255, 255, 255, 0.5)' }}>sec</span>
+          </div>
+        </div>
+
         {/* Divider */}
         <div style={{ borderTop: '1px solid var(--pixel-border)', margin: '4px 0' }} />
 
@@ -345,40 +489,57 @@ export function SettingsModal({ isOpen, onClose, isDebugMode, onToggleDebugMode,
         >
           Import Layout
         </button>
-        <button
-          onClick={() => {
-            const newVal = !isSoundEnabled()
-            setSoundEnabled(newVal)
-            setSoundLocal(newVal)
-            vscode.postMessage({ type: 'setSoundEnabled', enabled: newVal })
-          }}
-          onMouseEnter={() => setHovered('sound')}
-          onMouseLeave={() => setHovered(null)}
-          style={{
-            ...menuItemBase,
-            background: hovered === 'sound' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-          }}
-        >
-          <span>Sound Notifications</span>
-          <span
-            style={{
-              width: 14,
-              height: 14,
-              border: '2px solid rgba(255, 255, 255, 0.5)',
-              borderRadius: 0,
-              background: soundLocal ? 'rgba(90, 140, 255, 0.8)' : 'transparent',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              lineHeight: 1,
-              color: '#fff',
-            }}
-          >
-            {soundLocal ? 'X' : ''}
-          </span>
-        </button>
+        {/* Sound Section */}
+        <div style={sectionLabelStyle}>Sound</div>
+        {([
+          { key: 'enabled' as const, label: 'Enable Sound' },
+          { key: 'waiting' as const, label: 'Waiting' },
+          { key: 'rest' as const, label: 'Rest' },
+          { key: 'needsApproval' as const, label: 'Needs Approval' },
+          { key: 'idle' as const, label: 'Idle' },
+        ] as const).map(({ key, label }) => {
+          const isChild = key !== 'enabled'
+          const disabled = isChild && !soundSettings.enabled
+          return (
+            <button
+              key={key}
+              onClick={() => {
+                if (disabled) return
+                const next = { ...soundSettings, [key]: !soundSettings[key] }
+                onSoundSettingsChange(next)
+              }}
+              onMouseEnter={() => setHovered(`sound-${key}`)}
+              onMouseLeave={() => setHovered(null)}
+              style={{
+                ...menuItemBase,
+                paddingLeft: isChild ? 30 : 10,
+                background: hovered === `sound-${key}` && !disabled ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                opacity: disabled ? 0.35 : 1,
+                cursor: disabled ? 'default' : 'pointer',
+              }}
+            >
+              <span>{label}</span>
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  border: '2px solid rgba(255, 255, 255, 0.5)',
+                  borderRadius: 0,
+                  background: soundSettings[key] ? 'rgba(90, 140, 255, 0.8)' : 'transparent',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  lineHeight: 1,
+                  color: '#fff',
+                }}
+              >
+                {soundSettings[key] ? 'X' : ''}
+              </span>
+            </button>
+          )
+        })}
         <button
           onClick={onToggleDebugMode}
           onMouseEnter={() => setHovered('debug')}

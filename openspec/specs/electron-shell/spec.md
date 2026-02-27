@@ -19,15 +19,45 @@ TBD - created by archiving change 'pixel-agents-standalone'. Update Purpose afte
 
 ---
 ### Requirement: Application lifecycle management
-系統應依照 Electron 最佳實踐處理 app ready、window-all-closed 及 activate 事件。在 Windows 上，關閉所有視窗應結束應用程式。
+系統應依照 Electron 最佳實踐處理 app ready、window-all-closed 及 activate 事件。Tray 在所有模式下都存在，關閉視窗不會退出應用。
 
 #### Scenario: Graceful shutdown
-- **WHEN** 使用者關閉主視窗
+- **WHEN** 使用者透過 tray "Exit" 選項退出
 - **THEN** 所有已產生的 Claude CLI child process 應在應用程式結束前被終止
 
 #### Scenario: App ready initialization
 - **WHEN** Electron app 發出 'ready' 事件
-- **THEN** 主視窗建立、IPC handler 註冊，並開始載入資源
+- **THEN** 主視窗建立（除非 `-min` 模式）、tray icon 建立、IPC handler 註冊，並開始載入資源
+
+---
+
+### Requirement: 啟動參數解析
+Electron main process SHALL 解析 `-min` 啟動參數，控制是否建立視窗。
+
+#### Scenario: 正常啟動
+- **WHEN** 無 `-min` 參數
+- **THEN** 建立主視窗（現有行為），同時建立 tray icon
+
+#### Scenario: -min 啟動
+- **WHEN** 含 `-min` 參數
+- **THEN** 不建立視窗，建立 tray icon，AgentController 正常初始化
+
+---
+
+### Requirement: 視窗關閉行為
+window-all-closed 事件的處理 SHALL 根據是否有 tray 常駐來決定是否退出。Tray 在所有模式下都存在，因此關閉視窗永遠不會退出應用。
+
+#### Scenario: 一般模式關閉視窗
+- **WHEN** 非 `-min` 模式且所有視窗關閉
+- **THEN** 應用程式不退出，tray icon 常駐，可透過 tray "Show Window" 恢復視窗
+
+#### Scenario: -min 模式關閉視窗
+- **WHEN** `-min` 模式且所有視窗關閉
+- **THEN** 應用程式不退出，tray icon 常駐（無 Show Window 選項）
+
+#### Scenario: 退出應用程式
+- **WHEN** 使用者透過 tray "Exit" 選項
+- **THEN** 應用程式完全退出
 
 ---
 ### Requirement: Preload script with contextBridge

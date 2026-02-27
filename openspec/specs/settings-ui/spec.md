@@ -63,3 +63,59 @@ BottomToolbar 的 toggle 按鈕組 SHALL 採用 pixel art 風格，與現有按�
 #### Scenario: 選中狀態視覺
 - **WHEN** office 模式被選中
 - **THEN** office toggle 按鈕顯示 active 狀態（使用 `--pixel-active-bg` 和 `--pixel-accent` border）
+
+---
+
+### Requirement: SettingsModal 新增 Window section
+SettingsModal SHALL 新增 Window section，包含 Always-on-top toggle。
+
+#### Scenario: Always-on-top toggle
+- **WHEN** SettingsModal 開啟
+- **THEN** 顯示 "Always on Top" toggle，反映當前設定值
+
+---
+
+### Requirement: SettingsModal 新增 Network section
+SettingsModal SHALL 新增 Network section，包含 Peer Name、Broadcast toggle、UDP Port。
+
+#### Scenario: Peer Name input
+- **WHEN** SettingsModal 開啟
+- **THEN** 顯示 "Peer Name" text input，預設為電腦 hostname
+
+#### Scenario: Broadcast toggle
+- **WHEN** SettingsModal 開啟
+- **THEN** 顯示 "Broadcast" toggle，預設為 enabled
+
+#### Scenario: UDP Port input
+- **WHEN** SettingsModal 開啟
+- **THEN** 顯示 "UDP Port" number input，預設為 47800
+
+---
+
+### Requirement: SettingsModal Network section 新增 Heartbeat Interval
+SettingsModal 的 Network section SHALL 新增 Heartbeat Interval 數字輸入欄位。
+
+#### Scenario: Heartbeat Interval input
+- **WHEN** SettingsModal 開啟
+- **THEN** Network section 顯示 "Heartbeat Interval" number input（單位：秒），預設值為 scanIntervalSeconds
+
+---
+
+### Requirement: SettingsModal Sound section 細項設定
+SettingsModal SHALL 新增 Sound section，提供總開關及各事件類型的獨立音效開關。原有的獨立 Sound Notifications toggle 已移入此 section 作為總開關。
+
+#### Scenario: Sound section 結構
+- **WHEN** SettingsModal 開啟
+- **THEN** 顯示 Sound section，第一項為 "Enable Sound" 總開關，下方為各事件類型 checkbox
+
+#### Scenario: 事件類型 checkbox
+- **WHEN** Sound section 展開
+- **THEN** 顯示 Waiting、Rest、Needs Approval、Idle 四個 checkbox，Idle 預設 off，其餘預設 on
+
+#### Scenario: 總開關 off
+- **WHEN** Enable Sound 關閉
+- **THEN** 所有事件 checkbox 視覺上 disabled（greyed out），不觸發任何音效
+
+#### Scenario: 設定即時生效
+- **WHEN** 使用者切換任何 sound checkbox
+- **THEN** 變更即時生效並持久化至 disk

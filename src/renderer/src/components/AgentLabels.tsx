@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { OfficeState } from '../office/engine/officeState.js'
-import type { SubagentCharacter, AgentMeta } from '../hooks/useExtensionMessages.js'
+import type { SubagentCharacter, AgentMeta, RemotePeer } from '../hooks/useExtensionMessages.js'
 import type { ToolActivity } from '../office/types.js'
 import { TILE_SIZE, CharacterState } from '../office/types.js'
 
@@ -15,6 +15,8 @@ interface AgentLabelsProps {
   panRef: React.RefObject<{ x: number; y: number }>
   subagentCharacters: SubagentCharacter[]
   fontScale: number
+  remotePeers: RemotePeer[]
+  onAgentClick?: (agentId: number, label: string, position: { x: number; y: number }) => void
 }
 
 function getStatusText(
@@ -55,6 +57,8 @@ export function AgentLabels({
   panRef,
   subagentCharacters,
   fontScale,
+  remotePeers,
+  onAgentClick,
 }: AgentLabelsProps) {
   const fs = (base: number) => `${Math.round(base * fontScale)}px`
   const [, setTick] = useState(0)
@@ -88,6 +92,17 @@ export function AgentLabels({
     subLabelMap.set(sub.id, sub.label)
   }
 
+  // Build remote agent lookup: agentId in officeState → { peerName, remoteAgent }
+  const remoteAgentMap = new Map<number, { peerName: string; status: string; currentTool?: string }>()
+  for (const peer of remotePeers) {
+    for (const ra of peer.agents) {
+      // Remote agents use negative IDs based on peerId hash
+      const hash = Array.from(peer.peerId).reduce((acc, c) => acc + c.charCodeAt(0), 0)
+      const remoteId = -(hash * 1000 + ra.id)
+      remoteAgentMap.set(remoteId, { peerName: peer.name, status: ra.status, currentTool: ra.currentTool })
+    }
+  }
+
   const allIds = [...agents, ...subagentCharacters.map((s) => s.id)]
 
   return (
@@ -104,10 +119,17 @@ export function AgentLabels({
 
         const isSub = ch.isSubagent
         const meta = agentMetas[id]
-        const labelText = subLabelMap.get(id) || meta?.label || `Agent #${id}`
-        const statusText = isSub
-          ? (subLabelMap.get(id) || 'Subtask')
-          : getStatusText(id, agentStatuses, agentTools, ch.isActive)
+        const remoteInfo = remoteAgentMap.get(id)
+        const baseLabelText = subLabelMap.get(id) || meta?.label || `Agent #${id}`
+        const labelText = remoteInfo ? `[${remoteInfo.peerName}] ${baseLabelText}` : baseLabelText
+        let statusText: string
+        if (remoteInfo) {
+          statusText = remoteInfo.currentTool || (remoteInfo.status === 'rate_limited' ? 'Rest' : remoteInfo.status === 'waiting' ? 'Waiting' : 'Active')
+        } else if (isSub) {
+          statusText = subLabelMap.get(id) || 'Subtask'
+        } else {
+          statusText = getStatusText(id, agentStatuses, agentTools, ch.isActive)
+        }
         const statusColor = statusText === 'Rest' ? '#e55' : 'rgba(255, 255, 255, 0.6)'
 
         const isHovered = hoveredId === id
@@ -118,6 +140,10 @@ export function AgentLabels({
             <div
               onMouseEnter={() => setHoveredId(id)}
               onMouseLeave={() => setHoveredId(null)}
+              onClick={(e) => {
+                const clickLabel = subLabelMap.get(id) || meta?.label || `Agent #${id}`
+                onAgentClick?.(id, clickLabel, { x: e.clientX, y: e.clientY })
+              }}
               style={{
                 position: 'absolute',
                 left: screenX - charW / 2,

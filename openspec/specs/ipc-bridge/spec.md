@@ -38,5 +38,18 @@ TBD - created by archiving change 'pixel-agents-standalone'. Update Purpose afte
 renderer 的訊息監聽器應使用 `window.electronAPI.on('message', callback)`，而非 `window.addEventListener('message', handler)`。callback 應接收與 VSCode 的 `MessageEvent.data` 相同格式的資料。
 
 #### Scenario: useExtensionMessages hook compatibility
-- **WHEN** useExtensionMessages hook 註冊其事件監聽器
+- **WHEN** useExtensionMessages hook 註冊其事件監聯器
 - **THEN** 接收的訊息格式與 VSCode 版本相同，並以相同方式處理
+
+---
+
+### Requirement: remotePeers IPC 訊息
+IPC bridge SHALL 支援 `remotePeersUpdated` 訊息從 main process 推送遠端 peer 資料至 renderer。
+
+#### Scenario: remotePeersUpdated 訊息格式
+- **WHEN** main process 發送 remotePeersUpdated
+- **THEN** 訊息包含 `{ type: 'remotePeersUpdated', peers: RemotePeer[] }`
+
+#### Scenario: Peers 為空
+- **WHEN** 所有 remote peers 離線
+- **THEN** 發送 `{ type: 'remotePeersUpdated', peers: [] }`

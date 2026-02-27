@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import type { AgentMeta, SubagentCharacter } from '../hooks/useExtensionMessages.js'
+import type { AgentMeta, SubagentCharacter, RemotePeer } from '../hooks/useExtensionMessages.js'
 import type { ToolActivity } from '../office/types.js'
 import { projectDisplayName } from './AgentListPanel.js'
 
@@ -13,8 +13,9 @@ interface DashboardViewProps {
   subagentCharacters: SubagentCharacter[]
   subagentTools: Record<number, Record<string, ToolActivity[]>>
   dashboardLayout: DashboardLayout
-  onClickAgent: (id: number) => void
+  onAgentClick: (agentId: number, label: string, position: { x: number; y: number }) => void
   fontScale: number
+  remotePeers: RemotePeer[]
 }
 
 function relativeTime(ts: number | undefined): string {
@@ -66,7 +67,7 @@ function AgentCard({
   subs: SubagentCharacter[]
   subagentTools: Record<number, Record<string, ToolActivity[]>>
   layout: DashboardLayout
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
   fontScale: number
 }) {
   const fs = (base: number) => `${Math.round(base * fontScale)}px`
@@ -150,7 +151,7 @@ function AgentCard({
 
 export function DashboardView({
   agents, agentMetas, agentStatuses, agentTools,
-  subagentCharacters, subagentTools, dashboardLayout, onClickAgent, fontScale,
+  subagentCharacters, subagentTools, dashboardLayout, onAgentClick, fontScale, remotePeers,
 }: DashboardViewProps) {
   const fs = (base: number) => `${Math.round(base * fontScale)}px`
   // Force re-render every 30s for relative time updates
@@ -191,7 +192,7 @@ export function DashboardView({
     return map
   }, [subagentCharacters])
 
-  if (agents.length === 0) {
+  if (agents.length === 0 && remotePeers.length === 0) {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -239,10 +240,86 @@ export function DashboardView({
                   subs={subsByParent.get(id) || []}
                   subagentTools={subagentTools}
                   layout={dashboardLayout}
-                  onClick={() => onClickAgent(id)}
+                  onClick={(e: React.MouseEvent) => onAgentClick(id, meta.label, { x: e.clientX, y: e.clientY })}
                   fontScale={fontScale}
                 />
               ))}
+            </div>
+          </div>
+        ))}
+
+        {/* Remote peer groups */}
+        {remotePeers.map((peer) => (
+          <div key={peer.peerId} style={{ marginBottom: 24 }}>
+            <div style={{
+              fontSize: fs(22), color: 'rgba(130, 180, 255, 0.8)',
+              padding: '4px 0 8px', borderBottom: '1px solid var(--pixel-border)',
+              marginBottom: 12,
+            }}>
+              {peer.name}
+            </div>
+            <div style={
+              dashboardLayout === 'grid'
+                ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }
+                : { display: 'flex', flexDirection: 'column' as const, gap: 8 }
+            }>
+              {peer.agents.map((ra) => {
+                const statusColor = ra.status === 'rate_limited' ? '#e55'
+                  : ra.status === 'waiting' ? 'var(--vscode-charts-yellow, #cca700)'
+                  : 'var(--vscode-charts-blue, #3794ff)'
+                const statusText = ra.status === 'rate_limited' ? 'Rest' : ra.status === 'waiting' ? 'Waiting' : 'Active'
+                const remoteHistoryId = -(Math.abs(ra.id) + peer.peerId.charCodeAt(0) * 1000)
+                return (
+                  <div key={ra.id} onClick={(e) => onAgentClick(remoteHistoryId, ra.label, { x: e.clientX, y: e.clientY })} style={{
+                    background: 'rgba(30, 30, 46, 0.9)',
+                    border: '2px solid var(--pixel-border)',
+                    padding: '10px 14px',
+                    minWidth: dashboardLayout === 'grid' ? 240 : undefined,
+                    width: dashboardLayout === 'list' ? '100%' : undefined,
+                    cursor: 'pointer',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: fs(22), color: 'rgba(255, 255, 255, 0.9)', flex: 1 }}>
+                        {ra.label}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: fs(18), color: statusColor }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                        {statusText}
+                      </span>
+                    </div>
+                    {ra.currentTool && (
+                      <div style={{ fontSize: fs(16), color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        Current: {ra.currentTool}
+                      </div>
+                    )}
+                    {ra.subagents.length > 0 && (
+                      <div style={{ marginTop: 4 }}>
+                        <div style={{ fontSize: fs(16), color: 'rgba(255, 255, 255, 0.5)', marginBottom: 2 }}>
+                          Sub-agents: {ra.subagents.length}
+                        </div>
+                        {ra.subagents.map((sub, i) => (
+                          <div key={i} style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            padding: '1px 0 1px 12px', fontSize: fs(14),
+                            color: 'rgba(255, 255, 255, 0.5)',
+                          }}>
+                            <span style={{ flexShrink: 0 }}>└</span>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--vscode-charts-blue, #3794ff)', flexShrink: 0 }} />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {sub.label}
+                            </span>
+                            {sub.currentTool && (
+                              <span style={{ flexShrink: 0, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {sub.currentTool}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         ))}

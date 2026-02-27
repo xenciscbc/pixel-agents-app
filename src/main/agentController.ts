@@ -1,8 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { BrowserWindow, dialog } from 'electron';
-import type { AgentState, MessageSender, PersistedAgent } from './types';
+import type { AgentState, MessageSender, PersistedAgent, RemoteAgent, RemotePeer } from './types';
+import { startBroadcast, stopBroadcast } from './peerBroadcast';
+import { startDiscovery, stopDiscovery } from './peerDiscovery';
 import { SessionWatcher, ActiveSession } from './sessionWatcher';
 import { startFileWatching, readNewLines } from './fileWatcher';
 import { cancelWaitingTimer, cancelPermissionTimer } from './timerManager';
@@ -17,7 +20,13 @@ import {
 	getViewMode, setViewMode, getDashboardLayout, setDashboardLayout,
 	getAgentListPanelSize, setAgentListPanelSize,
 	getFontScale, setFontScale,
-	type WatchDir,
+	getAlwaysOnTop, setAlwaysOnTop as setAlwaysOnTopSetting,
+	getPeerName, setPeerName as setPeerNameSetting,
+	getBroadcastEnabled, setBroadcastEnabled as setBroadcastEnabledSetting,
+	getUdpPort, setUdpPort as setUdpPortSetting,
+	getHeartbeatInterval, setHeartbeatInterval as setHeartbeatIntervalSetting,
+	getSoundSettings, setSoundSettings as setSoundSettingsStore,
+	type WatchDir, type SoundSettings,
 } from './settingsStore';
 import {
 	SETTINGS_KEY_AGENTS,
@@ -42,6 +51,8 @@ export class AgentController {
 	private observeSessionMap = new Map<string, number>(); // sessionId → agentId
 	private agentNumbers = new Map<number, number>(); // agentId → display number
 	private usedNumbers = new Set<number>();
+	private peerId = crypto.randomUUID();
+	private currentPeers: RemotePeer[] = [];
 
 	constructor(private getWindow: () => BrowserWindow | null) {
 		this.sessionWatcher = new SessionWatcher();
@@ -96,6 +107,12 @@ export class AgentController {
 			case 'setSoundEnabled':
 				setSetting(SETTINGS_KEY_SOUND_ENABLED, msg.enabled);
 				break;
+			case 'setSoundSettings': {
+				const settings = msg.settings as SoundSettings;
+				setSoundSettingsStore(settings);
+				this.messageSender?.postMessage({ type: 'soundSettingsLoaded', soundSettings: settings });
+				break;
+			}
 			case 'getAgentListPanelPos':
 				this.messageSender?.postMessage({
 					type: 'agentListPanelPosLoaded',
@@ -183,6 +200,51 @@ export class AgentController {
 					fontScale: getFontScale(),
 				});
 				break;
+			case 'setAlwaysOnTop': {
+				const value = msg.value as boolean;
+				setAlwaysOnTopSetting(value);
+				const win = this.getWindow();
+				if (win) win.setAlwaysOnTop(value);
+				this.messageSender?.postMessage({ type: 'alwaysOnTopLoaded', alwaysOnTop: value });
+				break;
+			}
+			case 'setPeerName': {
+				const name = msg.name as string;
+				setPeerNameSetting(name);
+				this.messageSender?.postMessage({ type: 'peerNameLoaded', peerName: name });
+				break;
+			}
+			case 'setBroadcastEnabled': {
+				const enabled = msg.enabled as boolean;
+				setBroadcastEnabledSetting(enabled);
+				this.messageSender?.postMessage({ type: 'broadcastEnabledLoaded', broadcastEnabled: enabled });
+				if (enabled) {
+					startBroadcast(
+						() => this.getAgentSnapshot(),
+						this.peerId,
+						getPeerName,
+						getUdpPort,
+						getHeartbeatInterval,
+					);
+				} else {
+					stopBroadcast();
+				}
+				break;
+			}
+			case 'setUdpPort': {
+				const port = msg.port as number;
+				setUdpPortSetting(port);
+				this.messageSender?.postMessage({ type: 'udpPortLoaded', udpPort: port });
+				this.restartPeerNetwork();
+				break;
+			}
+			case 'setHeartbeatInterval': {
+				const seconds = msg.seconds as number;
+				setHeartbeatIntervalSetting(seconds);
+				this.messageSender?.postMessage({ type: 'heartbeatIntervalLoaded', heartbeatInterval: seconds });
+				this.restartPeerNetwork();
+				break;
+			}
 			case 'selectProjectDir': {
 				const win = this.getWindow();
 				if (!win) break;
@@ -208,6 +270,7 @@ export class AgentController {
 		// Send settings
 		const soundEnabled = getSetting<boolean>(SETTINGS_KEY_SOUND_ENABLED, true);
 		sender.postMessage({ type: 'settingsLoaded', soundEnabled });
+		sender.postMessage({ type: 'soundSettingsLoaded', soundSettings: getSoundSettings() });
 		sender.postMessage({
 			type: 'viewModeSettingsLoaded',
 			viewMode: getViewMode(),
@@ -220,6 +283,26 @@ export class AgentController {
 		sender.postMessage({
 			type: 'fontScaleLoaded',
 			fontScale: getFontScale(),
+		});
+		sender.postMessage({
+			type: 'alwaysOnTopLoaded',
+			alwaysOnTop: getAlwaysOnTop(),
+		});
+		sender.postMessage({
+			type: 'peerNameLoaded',
+			peerName: getPeerName(),
+		});
+		sender.postMessage({
+			type: 'broadcastEnabledLoaded',
+			broadcastEnabled: getBroadcastEnabled(),
+		});
+		sender.postMessage({
+			type: 'udpPortLoaded',
+			udpPort: getUdpPort(),
+		});
+		sender.postMessage({
+			type: 'heartbeatIntervalLoaded',
+			heartbeatInterval: getHeartbeatInterval(),
 		});
 
 		// Load and send assets
@@ -250,6 +333,10 @@ export class AgentController {
 
 		// Start session watcher for observe mode
 		this.startWatching();
+
+		// Start peer network
+		this.initPeerNetwork();
+		sender.postMessage({ type: 'remotePeersUpdated', peers: this.currentPeers });
 	}
 
 	private handleCloseAgent(agentId: number): void {
@@ -493,10 +580,73 @@ export class AgentController {
 		this.sessionWatcher.rescan();
 	}
 
+	getAgentSnapshot(): RemoteAgent[] {
+		const result: RemoteAgent[] = [];
+		for (const [agentId, agent] of this.agents) {
+			const num = this.agentNumbers.get(agentId) ?? agentId;
+			const label = `Agent #${num}`;
+			const projectDir = agent.projectDir ? path.basename(agent.projectDir) : '';
+
+			let status: 'active' | 'waiting' | 'rate_limited' = 'active';
+			if (agent.isWaiting) status = 'waiting';
+
+			let currentTool: string | undefined;
+			for (const [, toolStatus] of agent.activeToolStatuses) {
+				currentTool = toolStatus;
+				break;
+			}
+
+			const subagents: { label: string; currentTool?: string }[] = [];
+			for (const [parentToolId, subToolNames] of agent.activeSubagentToolNames) {
+				let subLabel = parentToolId;
+				let subCurrentTool: string | undefined;
+				for (const [, toolName] of subToolNames) {
+					subCurrentTool = toolName;
+					break;
+				}
+				subagents.push({ label: subLabel, currentTool: subCurrentTool });
+			}
+
+			result.push({ id: agentId, label, projectDir, status, currentTool, subagents });
+		}
+		return result;
+	}
+
+	private initPeerNetwork(): void {
+		if (getBroadcastEnabled()) {
+			startBroadcast(
+				() => this.getAgentSnapshot(),
+				this.peerId,
+				getPeerName,
+				getUdpPort,
+				getHeartbeatInterval,
+			);
+		}
+		startDiscovery(
+			getUdpPort(),
+			this.peerId,
+			getHeartbeatInterval,
+			(peers) => this.onPeersChanged(peers),
+		);
+	}
+
+	private restartPeerNetwork(): void {
+		stopBroadcast();
+		stopDiscovery();
+		this.initPeerNetwork();
+	}
+
+	private onPeersChanged(peers: RemotePeer[]): void {
+		this.currentPeers = peers;
+		this.messageSender?.postMessage({ type: 'remotePeersUpdated', peers });
+	}
+
 	dispose(): void {
 		this.sessionWatcher.stop();
 		this.layoutWatcher?.dispose();
 		this.layoutWatcher = null;
+		stopBroadcast();
+		stopDiscovery();
 
 		for (const [id, agent] of this.agents) {
 			if (agent.processRef) {

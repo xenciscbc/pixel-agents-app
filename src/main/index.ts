@@ -1,10 +1,12 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import { AgentController } from './agentController';
-import { getSetting, setSetting } from './settingsStore';
+import { getSetting, setSetting, getAlwaysOnTop } from './settingsStore';
+import { createTray, getTray } from './trayManager';
 
 let mainWindow: BrowserWindow | null = null;
 let controller: AgentController | null = null;
+const startMinimized = process.argv.includes('-min');
 
 function loadWindowState(): { x?: number; y?: number; width: number; height: number } {
 	try {
@@ -62,10 +64,19 @@ app.whenReady().then(() => {
 		controller?.handleMessage(msg);
 	});
 
-	createWindow();
+	createTray(() => mainWindow, createWindow, startMinimized);
+
+	if (!startMinimized) {
+		createWindow();
+		if (mainWindow && getAlwaysOnTop()) {
+			mainWindow.setAlwaysOnTop(true);
+		}
+	}
 });
 
 app.on('window-all-closed', () => {
+	// If tray exists, keep app running in background
+	if (getTray()) return;
 	controller?.dispose();
 	app.quit();
 });

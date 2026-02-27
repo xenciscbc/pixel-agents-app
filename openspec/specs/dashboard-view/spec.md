@@ -20,7 +20,7 @@ Dashboard 文字儀表板模式，提供以卡片為主的 agent 監控介面，
 ---
 
 ### Requirement: Agent 卡片顯示豐富資訊
-DashboardView 中每個 agent SHALL 以卡片形式顯示，包含 label、狀態、當前工具、sub-agent 清單、最後活動時間。
+DashboardView 中每個 agent SHALL 以卡片形式顯示，包含 label、狀態、當前工具、sub-agent 清單、最後活動時間。點擊卡片開啟狀態歷史 popup。
 
 #### Scenario: Active agent 卡片內容
 - **WHEN** agent 處於 Active 狀態且正在執行工具
@@ -37,6 +37,10 @@ DashboardView 中每個 agent SHALL 以卡片形式顯示，包含 label、狀�
 #### Scenario: 最後活動時間為剛剛
 - **WHEN** agent 的最後活動時間距今小於 30 秒
 - **THEN** 卡片顯示 "Last: just now"
+
+#### Scenario: 點擊開啟歷史
+- **WHEN** 使用者點擊本機 agent 卡片
+- **THEN** 觸發 onAgentClick callback 開啟狀態歷史 popup（取代原有的空操作 focusAgent）
 
 ---
 
@@ -116,3 +120,16 @@ DashboardView SHALL 根據 `fontScale` 設定縮放所有 fontSize。
 #### Scenario: fontScale 套用至所有文字
 - **WHEN** fontScale 為 N
 - **THEN** 所有文字元素的 fontSize 為基礎值乘以 N（四捨五入至整數 px）
+
+---
+
+### Requirement: Dashboard 遠端 agent 分組
+DashboardView SHALL 接收 remotePeers prop，以 peer name 為群組 header 顯示遠端 agents。遠端 agent card 可點擊查看歷史。
+
+#### Scenario: 混合本機與遠端
+- **WHEN** 同時有本機和遠端 agents
+- **THEN** 本機 agents 按現有邏輯顯示（依 project 分組），遠端 agents 在下方按 peer name 分組
+
+#### Scenario: 遠端 agent card 可點擊
+- **WHEN** 使用者點擊遠端 agent card
+- **THEN** 觸發 onAgentClick callback 開啟狀態歷史 popup

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { app } from 'electron';
 
 export interface WatchDir {
@@ -15,6 +16,20 @@ export const SETTINGS_KEY_VIEW_MODE = 'viewMode';
 export const SETTINGS_KEY_DASHBOARD_LAYOUT = 'dashboardLayout';
 export const SETTINGS_KEY_AGENT_LIST_PANEL_SIZE = 'agentListPanelSize';
 export const SETTINGS_KEY_FONT_SCALE = 'fontScale';
+export const SETTINGS_KEY_ALWAYS_ON_TOP = 'alwaysOnTop';
+export const SETTINGS_KEY_PEER_NAME = 'peerName';
+export const SETTINGS_KEY_BROADCAST_ENABLED = 'broadcastEnabled';
+export const SETTINGS_KEY_UDP_PORT = 'udpPort';
+export const SETTINGS_KEY_HEARTBEAT_INTERVAL = 'heartbeatInterval';
+export const SETTINGS_KEY_SOUND_SETTINGS = 'soundSettings';
+
+export interface SoundSettings {
+	enabled: boolean;
+	waiting: boolean;
+	rest: boolean;
+	needsApproval: boolean;
+	idle: boolean;
+}
 
 let settingsCache: Record<string, unknown> | null = null;
 
@@ -120,4 +135,64 @@ export function getFontScale(): number {
 
 export function setFontScale(scale: number): void {
 	setSetting(SETTINGS_KEY_FONT_SCALE, scale);
+}
+
+export function getAlwaysOnTop(): boolean {
+	return getSetting<boolean>(SETTINGS_KEY_ALWAYS_ON_TOP, false);
+}
+
+export function setAlwaysOnTop(value: boolean): void {
+	setSetting(SETTINGS_KEY_ALWAYS_ON_TOP, value);
+}
+
+export function getPeerName(): string {
+	return getSetting<string>(SETTINGS_KEY_PEER_NAME, os.hostname());
+}
+
+export function setPeerName(name: string): void {
+	setSetting(SETTINGS_KEY_PEER_NAME, name);
+}
+
+export function getBroadcastEnabled(): boolean {
+	return getSetting<boolean>(SETTINGS_KEY_BROADCAST_ENABLED, true);
+}
+
+export function setBroadcastEnabled(value: boolean): void {
+	setSetting(SETTINGS_KEY_BROADCAST_ENABLED, value);
+}
+
+export function getUdpPort(): number {
+	return getSetting<number>(SETTINGS_KEY_UDP_PORT, 47800);
+}
+
+export function setUdpPort(port: number): void {
+	setSetting(SETTINGS_KEY_UDP_PORT, port);
+}
+
+export function getHeartbeatInterval(): number {
+	return getSetting<number>(SETTINGS_KEY_HEARTBEAT_INTERVAL, getScanInterval());
+}
+
+export function setHeartbeatInterval(seconds: number): void {
+	setSetting(SETTINGS_KEY_HEARTBEAT_INTERVAL, seconds);
+}
+
+const DEFAULT_SOUND_SETTINGS: SoundSettings = {
+	enabled: true,
+	waiting: true,
+	rest: true,
+	needsApproval: true,
+	idle: false,
+};
+
+export function getSoundSettings(): SoundSettings {
+	const stored = getSetting<SoundSettings | null>(SETTINGS_KEY_SOUND_SETTINGS, null);
+	if (stored) return { ...DEFAULT_SOUND_SETTINGS, ...stored };
+	// Fallback: read legacy soundEnabled key
+	const legacyEnabled = getSetting<boolean>('soundEnabled', true);
+	return { ...DEFAULT_SOUND_SETTINGS, enabled: legacyEnabled };
+}
+
+export function setSoundSettings(settings: SoundSettings): void {
+	setSetting(SETTINGS_KEY_SOUND_SETTINGS, settings);
 }
